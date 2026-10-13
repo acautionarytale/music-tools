@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Chart Maker</title>
+<script>try{var t=localStorage.getItem('musicTools.theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+  :root {
+    --ink:#4A3F3B; --muted:#85766D; --page:#EFE7D8; --paper:#FBF8F1; --field:#FFFDF8;
+    --line:#DDD2BF; --soft:#F3ECDD; --focus:#8B6FA8; --danger:#A3281F;
+    --serif:"Palatino Linotype",Palatino,"Book Antiqua","Iowan Old Style","Times New Roman",serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font-family:var(--serif); font-size:17px; line-height:1.45; }
+  .wrap { max-width:1100px; margin:0 auto; padding:32px 24px 56px; }
+  h1 { font-size:32px; line-height:1.15; margin:0 0 6px; }
+  .sub { color:var(--muted); font-style:italic; margin:0 0 24px; }
+  .homelink { display:inline-block; margin:0 0 12px; color:var(--muted); text-decoration:none; font-size:15px; border-radius:6px; }
+  .homelink:hover { color:var(--ink); text-decoration:underline; }
+  .card { background:var(--paper); border-radius:16px; padding:20px; margin-bottom:16px; }
+  .card h2 { font-size:19px; margin:0 0 14px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:10px; }
+  .row:last-child { margin-bottom:0; }
+  label { font-size:15px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  label:has(> input[type=checkbox]) { color:var(--ink); font-size:16px; cursor:pointer; }
+  input[type=checkbox] { width:20px; height:20px; margin:0; accent-color:var(--ink); cursor:pointer; }
+  input[type=text], input[type=number], select {
+    font:inherit; font-size:16px; color:var(--ink); background:var(--field);
+    border:1px solid var(--line); border-radius:10px; padding:9px 12px;
+  }
+  input[type=text] { width:230px; max-width:100%; }
+  input[type=number] { width:84px; }
+  select { max-width:230px; }
+  #title { width:min(420px, calc(100vw - 130px)); }
+  input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible, .filebtn:focus-within {
+    outline:3px solid var(--focus); outline-offset:1px;
+  }
+  button, .filebtn {
+    font:inherit; font-size:17px; font-weight:700; cursor:pointer; display:inline-block;
+    background:var(--ink); color:var(--on-ink); border:1px solid var(--ink); border-radius:10px; padding:13px 22px;
+  }
+  button:hover { background:var(--btn-hover); }
+  button.alt, .filebtn { background:var(--field); color:var(--ink); border:1px solid var(--line); padding:10px 16px; font-size:16px; }
+  button.alt:hover, .filebtn:hover { background:var(--soft); }
+  button.small { padding:6px 12px; font-size:14px; border-radius:8px; }
+  button.danger { background:var(--field); color:var(--danger); border:1px solid var(--danger-line); }
+  button.danger:hover { background:var(--danger-bg); }
+  .msg { font-size:15px; color:var(--muted); font-style:italic; }
+  details > summary { cursor:pointer; font-weight:700; font-size:19px; margin-bottom:14px; border-radius:6px; }
+  .gridwrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--field); }
+  table.grid { border-collapse:separate; border-spacing:0; font-size:14px; }
+  table.grid th, table.grid td { padding:5px; border-bottom:1px solid var(--line); background:var(--field); }
+  table.grid th { position:sticky; top:0; font-weight:700; text-align:center; }
+  table.grid .sticky { position:sticky; left:0; z-index:2; min-width:180px; max-width:180px; text-align:left; border-right:1px solid var(--line); background:var(--paper); }
+  table.grid input.cell { width:76px; font:inherit; font-size:14px; padding:7px 6px; border:1px solid var(--line); border-radius:8px; text-align:right; background:var(--field); color:var(--ink); }
+  table.grid input.aname { width:100%; font:inherit; font-size:15px; font-weight:700; padding:7px 8px; border:1px solid var(--line); border-radius:8px; background:var(--field); color:var(--ink); }
+  table.grid input.cell.prev { background:var(--soft); }
+  table.grid th.prevh { color:var(--muted); background:var(--soft); }
+  .ctl { display:flex; gap:4px; margin-top:6px; }
+  .preview { overflow-x:auto; border-radius:16px; background:var(--paper); box-shadow:0 10px 30px var(--shadow); width:fit-content; max-width:100%; }
+  #img { display:block; max-width:none; }
+  #cv { display:none; }
+  .hint { font-size:15px; color:var(--muted); font-style:italic; margin:10px 0 0; }
+  @media (max-width:600px) { .wrap { padding:20px 16px 48px; } h1 { font-size:28px; } }
+
+  /* ---------- site-wide light / dark theme ---------- */
+  :root { color-scheme:light; --soft:#F3ECDD; --on-ink:#FBF3E4; --btn-hover:#5E504A; --shadow:rgba(74,63,59,.22); --danger-line:#D7ADA7; --danger-bg:#FBEDEA; --toc-hover:rgba(251,248,241,.8); }
+  :root[data-theme="dark"] {
+    color-scheme:dark;
+    --ink:#EDE3D3; --ink-soft:#A99C8F; --muted:#A99C8F; --page:#171311; --panel:#221D1A; --paper:#221D1A; --field:#2B2521;
+    --line:#3D342E; --soft:#332B26; --focus:#B79BD6; --danger:#F29A90;
+    --on-ink:#1B1613; --btn-hover:#FFF6E6; --shadow:rgba(0,0,0,.55); --danger-line:#6B3E39; --danger-bg:#3A2522; --toc-hover:rgba(34,29,26,.85);
+  }
+  body { position:relative; }
+  .themebtn { position:fixed; bottom:16px; right:16px; z-index:40; box-shadow:0 4px 14px var(--shadow) !important; width:40px; height:40px; padding:0; display:grid; place-items:center; border-radius:50%; border:1px solid var(--line); background:var(--field); color:var(--ink); cursor:pointer; line-height:0; box-shadow:none; font-size:0; }
+  .themebtn:hover { background:var(--soft); }
+  .themebtn svg { width:20px; height:20px; }
+  .themebtn .i-sun { display:none; }
+  :root[data-theme="dark"] .themebtn .i-sun { display:block; }
+  :root[data-theme="dark"] .themebtn .i-moon { display:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { display:flex; align-items:center; gap:8px; padding:6px 14px 6px 6px; border-radius:12px; border:1.5px solid var(--line); background:var(--field); color:var(--ink); font:inherit; font-size:15px; font-weight:400; cursor:pointer; }
+  .chip:hover { background:var(--soft); }
+  .chip[aria-pressed="true"] { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); font-weight:700; }
+  .chip .sw-theme { width:34px; height:34px; border-radius:8px; border:1px solid rgba(74,63,59,.25); display:grid; place-items:center; font-size:16px; font-weight:700; }
+  .kindchip { padding:8px 18px; }
+  .style-group { margin:4px 0 14px; }
+  .style-group h3 { font-size:15px; margin:0 0 8px; color:var(--muted); font-weight:400; font-style:italic; }
+  .custom-row { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; }
+  .custom-row[hidden] { display:none; }
+  input[type="color"] { width:44px; height:36px; padding:2px; cursor:pointer; border:1px solid var(--line); border-radius:8px; background:var(--field); }
+  table.grid input.cell { width:96px; }
+  table.grid input.tcell { width:100%; font:inherit; font-size:15px; padding:7px 8px; border:1px solid var(--line); border-radius:8px; background:var(--field); color:var(--ink); }
+  table.grid td.t { min-width:230px; } table.grid td.a { min-width:190px; }
+  table.grid td.n { width:110px; }
+  table.grid th.left { text-align:left; padding-left:8px; }
+  details.paste { margin-top:14px; }
+  details.paste > summary { font-size:16px; margin-bottom:8px; }
+  textarea { width:100%; font:inherit; font-size:15px; color:var(--ink); background:var(--field); border:1px solid var(--line); border-radius:10px; padding:9px 12px; resize:vertical; }
+  input[type=date] { font:inherit; font-size:16px; color:var(--ink); background:var(--field); border:1px solid var(--line); border-radius:10px; padding:8px 12px; }
+  #subtitle { width:min(300px, calc(100vw - 130px)); }
+</style>
+</head>
+<body>
+<button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark theme" title="Switch to dark theme"><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+
+<div class="wrap">
+  <a class="homelink" href="../index.html">← All tools</a>
+  <h1>Personal Chart Maker</h1>
+  <p class="sub">Enter the songs you played each week and get a shareable, Hot 100-style chart of your own, with last week, peak, weeks on chart and movement worked out for you.</p>
+
+  <!-- DATA -->
+  <div class="card">
+    <h2>1. Weeks</h2>
+    <div class="row">
+      <label class="filebtn">Upload sheet (.xlsx / .csv)
+        <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+      </label>
+      <label><input type="checkbox" id="replace" checked> Replace existing data</label>
+      <button class="alt small" id="tpl">Download template</button>
+      <button class="alt small" id="spBtn">Import from Spotify</button>
+    </div>
+    <div class="msg" id="loadMsg">Columns needed: Week, Title, Artist, Streams. Week is the date the week ends. Artist is optional.</div>
+    <div class="row" style="margin-top:12px">
+      <label>Week ending <select id="week"></select></label>
+      <button class="danger small" id="delWeek">Delete week</button>
+    </div>
+    <div class="row">
+      <label>Add a week ending <input type="date" id="newWeek"></label>
+      <label><input type="checkbox" id="carry" checked> Start with last week's songs</label>
+      <button class="alt small" id="addWeek">Add week</button>
+    </div>
+    <div class="row">
+      <button class="alt small" id="expCsv">Export data (.csv)</button>
+      <button class="alt small" id="expXlsx">Export data (.xlsx)</button>
+      <button class="alt small" id="copyCsv">Copy as CSV</button>
+      <button class="danger small" id="clearAll">Clear all data</button>
+      <span class="msg" id="dataMsg"></span>
+    </div>
+  </div>
+
+  <!-- EDITOR -->
+  <div class="card">
+    <details open>
+      <summary>2. Enter streams for the week</summary>
+      <div class="gridwrap" id="grid"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="alt small" id="addSong">+ Add song</button>
+        <button class="alt small" id="sortSongs">Sort by streams</button>
+      </div>
+      <details class="paste">
+        <summary>Paste a list instead</summary>
+        <textarea id="pasteBox" rows="5" spellcheck="false" placeholder="One song per line: Title, Artist, Streams&#10;From the Start, Laufey, 45"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="alt small" id="pasteGo">Add to this week</button>
+          <span class="msg" id="pasteMsg">Commas or tabs both work, so you can paste straight from a spreadsheet. Artist can be left out.</span>
+        </div>
+      </details>
+      <p class="hint">Songs are ranked by their streams that week, and a song that's already in the week gets its streams updated. A blank or zero count means the song didn't play. Last week, peak and weeks on chart come from the other weeks you've entered.</p>
+    </details>
+    <datalist id="titleList"></datalist>
+    <datalist id="artistList"></datalist>
+  </div>
+
+  <!-- OPTIONS -->
+  <div class="card">
+    <h2>3. Chart</h2>
+    <div class="row">
+      <label>Title <input type="text" id="title"></label>
+      <button class="alt small" id="autoTitle">Auto title</button>
+    </div>
+    <div class="row">
+      <label>Subtitle <input type="text" id="subtitle"></label>
+      <label>Chart is a top
+        <select id="size"><option value="10">10</option><option value="20">20</option><option value="25">25</option><option value="40">40</option><option value="50">50</option><option value="100" selected>100</option></select>
+      </label>
+      <label>Show the top
+        <select id="show"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="40">40</option><option value="50">50</option><option value="100">100</option></select>
+      </label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="showMove" checked> Movement</label>
+      <label><input type="checkbox" id="showLW" checked> Last week</label>
+      <label><input type="checkbox" id="showPeak" checked> Peak</label>
+      <label><input type="checkbox" id="showWks" checked> Weeks on chart</label>
+      <label><input type="checkbox" id="showStreams" checked> Streams</label>
+    </div>
+    <div class="style-group"><h3>Extra color</h3>
+      <div class="row" style="margin-bottom:0">
+        <label><input type="checkbox" id="cStreams" checked> Shade streams by change</label>
+        <label><input type="checkbox" id="cPeak" checked> Highlight new and tied peaks</label>
+        <label><input type="checkbox" id="cRows" checked> Tint titles by movement</label>
+      </div>
+    </div>
+    <div class="style-group"><h3>Background</h3>
+      <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
+      <div class="custom-row" id="customTheme" hidden>
+        <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
+        <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
+      </div>
+    </div>
+    <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+    <div class="row">
+      <button id="dl">Download PNG</button>
+      <button id="share" class="alt" style="display:none">Share / Save</button>
+      <span class="msg" id="dlMsg">If the download doesn't start, press and hold the image to save it.</span>
+    </div>
+  </div>
+
+  <div class="preview"><img id="img" alt="Personal chart"></div>
+  <canvas id="cv"></canvas>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const MONTHS=0;
+const LS_KEY = "weeklyChart.v1";
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+const canvas = $("cv"), ctx = canvas.getContext("2d"), S = 2;
+
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+const has = (o, k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(o, k);
+const THEMES = {
+  cream:    { name:"Cream",    BG:"#F8F1E4", INK:"#4A3F3B", MUTED:"#8F8076" },
+  blush:    { name:"Blush",    BG:"#FBEDEA", INK:"#5A3E45", MUTED:"#94777C" },
+  sage:     { name:"Sage",     BG:"#EDF1E6", INK:"#38483B", MUTED:"#73836F" },
+  mist:     { name:"Mist",     BG:"#EAF0F6", INK:"#34455A", MUTED:"#71829A" },
+  midnight: { name:"Midnight", BG:"#1F2640", INK:"#F2EEF8", MUTED:"#A3A9C7" },
+  custom:   { name:"Custom" }
+};
+const FONTS = {
+  serif: { name:"Serif", stack:'"Palatino Linotype",Palatino,"Book Antiqua","Iowan Old Style","Times New Roman",serif' },
+  sans:  { name:"Sans",  stack:'"Avenir Next","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif' }
+};
+let style = { themeId:"cream", font:"serif", custom:null };
+const rgbOf = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+const rgba = (h,a) => { const [r,g,b] = rgbOf(h); return `rgba(${r},${g},${b},${a})`; };
+const mixHex = (a,b,t) => { const x = rgbOf(a), y = rgbOf(b); return "#" + x.map((v,i)=>Math.round(v+(y[i]-v)*t).toString(16).padStart(2,"0")).join(""); };
+const lum = h => { const [r,g,b] = rgbOf(h).map(v => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*r+0.7152*g+0.0722*b; };
+function theme(){
+  let t = THEMES[has(THEMES, style.themeId) ? style.themeId : "cream"];
+  if (style.themeId === "custom"){
+    const c = style.custom || {}, bg = HEX6.test(c.bg) ? c.bg : THEMES.cream.BG, ink = HEX6.test(c.ink) ? c.ink : THEMES.cream.INK;
+    t = { BG:bg, INK:ink, MUTED:mixHex(ink,bg,0.4) };
+  }
+  const dark = lum(t.BG) < 0.25;
+  return Object.assign({ dark,
+    POS: dark ? "#5FBF98" : "#4F9F7E", NEG: dark ? "#E58A85" : "#D9807B",
+    POSTXT: dark ? "#BFEBD3" : "#1F5A40", NEGTXT: dark ? "#FFC4BF" : "#8E2F2B" }, t);
+}
+function fmtPct(p){ const a=Math.abs(p), s=a>=1000?(a/1000).toFixed(1)+"k":Math.round(a).toString(); return (p>=0?"+":"−")+s+"%"; }
+function fmtVal(v,dec){
+  if (v>=1e6) return (v/1e6).toFixed(1)+"M";
+  if (v>=1e5) return Math.round(v/1e3)+"k";
+  if (v>=100 || dec===0) return Math.round(v).toLocaleString("en-US");
+  return v.toFixed(dec);
+}
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function sizeCanvas(W,H,th){
+  canvas.width=W*S; canvas.height=H*S; ctx.setTransform(S,0,0,S,0,0);
+  ctx.fillStyle=th.BG; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba(th.INK,0.18); ctx.lineWidth=1.5; rr(16,16,W-32,H-32,24); ctx.stroke();
+}
+function showImg(W){ const img=$("img"); img.src=canvas.toDataURL("image/png"); img.style.width=W+"px"; }
+
+
+const chipRefs = { theme:[], font:[] };
+const STRIPES = "repeating-linear-gradient(45deg,#E3DACB 0 5px,#F3ECDD 5px 10px)";
+function buildChips(){
+  [["theme","#themeChips",THEMES],["font","#fontChips",FONTS]].forEach(([key,sel,options])=>{
+    const box=document.querySelector(sel); box.textContent="";
+    Object.keys(options).forEach(id=>{
+      const o=options[id], chip=document.createElement("button"); chip.type="button"; chip.className="chip";
+      const sw=document.createElement("span"); sw.className="sw-theme"; sw.textContent="Aa";
+      if (key==="font"){ sw.style.fontFamily=o.stack; sw.style.background="#FFFDF8"; sw.style.color="#4A3F3B"; }
+      const label=document.createElement("span"); label.textContent=o.name; chip.append(sw,label);
+      chip.addEventListener("click",()=>{
+        if (key==="theme"){
+          if (id==="custom" && style.themeId!=="custom" && !style.custom){ const t=theme(); style.custom={bg:t.BG, ink:t.INK}; }
+          style.themeId=id;
+        } else style.font=id;
+        persist(); paintChips(); renderChart();
+      });
+      box.appendChild(chip); chipRefs[key].push({id,chip,sw});
+    });
+  });
+}
+function paintChips(){
+  chipRefs.theme.forEach(({id,chip,sw})=>{
+    let bg=null, ink=null;
+    if (id==="custom"){ if (style.custom){ bg=style.custom.bg; ink=style.custom.ink; } } else { bg=THEMES[id].BG; ink=THEMES[id].INK; }
+    sw.style.background=bg||STRIPES; sw.style.color=ink||"#85766D";
+    chip.setAttribute("aria-pressed", String(style.themeId===id));
+  });
+  chipRefs.font.forEach(({id,chip})=>chip.setAttribute("aria-pressed", String(style.font===id)));
+  $("customTheme").hidden = style.themeId!=="custom";
+  if (style.themeId==="custom"){ const t=theme(); $("cBg").value=t.BG; $("cInk").value=t.INK; }
+}
+["cBg","cInk"].forEach(id=>$(id).addEventListener("input",()=>{ style.custom={bg:$("cBg").value, ink:$("cInk").value}; persist(); paintChips(); renderChart(); }));
+
+/* ---------------- state ---------------- */
+let weeks = {};   // "YYYY-MM-DD" (the date the week ends) -> [{ t:title, a:artist, n:streams }]
+let ui = { week:null, size:100, show:10, move:true, lw:true, peak:true, wks:true, streams:true, cStreams:true, cPeak:true, cRows:true };
+let titleDirty = false, subDirty = false;
+
+const pad2 = n => String(n).padStart(2,"0");
+const toIso = d => d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+const fromIso = iso => { const [y,m,d] = iso.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (iso, n) => { const d = fromIso(iso); d.setDate(d.getDate()+n); return toIso(d); };
+const fmtDate = iso => fromIso(iso).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+const sortedWeeks = () => Object.keys(weeks).sort();
+const keyOf = r => (String(r.t||"").trim()+"|"+String(r.a||"").trim()).toLowerCase();
+function parseNum(v){
+  const s = String(v ?? "").replace(/[,\s]/g,"");
+  if (s==="") return null;
+  const n = Number(s);
+  return isFinite(n) && n>=0 ? n : null;
+}
+
+function sampleWeeks(){
+  // Placeholder numbers: one listener's plausible weekly plays, not real data.
+  const dates = ["2026-09-03","2026-09-10","2026-09-17","2026-09-24","2026-10-01","2026-10-08"];
+  const songs = [
+    ["From the Start",    [41,44,39,42,47,45]],
+    ["Falling Behind",    [33,31,35,36,34,38]],
+    ["Valentine",         [28,30,29,26,27,29]],
+    ["Lover Girl",        [0,0,24,37,46,52]],
+    ["Like the Movies",   [36,35,32,30,28,25]],
+    ["Magnolia",          [25,27,26,24,22,23]],
+    ["Someone New",       [22,21,24,23,25,24]],
+    ["Street by Street",  [19,18,20,21,19,17]],
+    ["Bewitched",         [30,26,23,21,20,18]],
+    ["Dreamer",           [14,15,16,17,22,26]],
+    ["Best Friend",       [17,16,15,12,0,21]],
+    ["Promise",           [12,13,11,14,16,11]],
+    ["Silver Lining",     [0,0,0,0,0,27]]
+  ];
+  const w = {};
+  dates.forEach((d,i) => { w[d] = []; songs.forEach(([t,v]) => { if (v[i]) w[d].push({ t, a:"Laufey", n:v[i] }); }); });
+  return w;
+}
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({weeks, ui, style})); }catch(e){} }
+function loadSaved(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_KEY));
+    if (s && s.weeks && typeof s.weeks==="object" && Object.keys(s.weeks).length){
+      weeks = s.weeks; Object.assign(ui, s.ui||{});
+      if (!s.ui || s.ui.show == null) ui.show = ui.size;   // charts saved before the two counts were separated showed the whole chart
+      const st = s.style||{};
+      if (has(THEMES, st.themeId)) style.themeId=st.themeId;
+      if (has(FONTS, st.font)) style.font=st.font;
+      if (st.custom && HEX6.test(st.custom.bg) && HEX6.test(st.custom.ink)) style.custom={bg:st.custom.bg, ink:st.custom.ink};
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function ensureSel(){
+  const ws = sortedWeeks();
+  if (!ws.length){ ui.week = null; return; }
+  if (!weeks[ui.week]) ui.week = ws[ws.length-1];
+}
+
+/* ---------------- ranking ---------------- */
+// Every week ranked by streams. Ties go to the song that was ahead last week, then A to Z.
+function computeRanks(){
+  const out = {}; let prev = null;
+  sortedWeeks().forEach(d => {
+    const m = new Map();
+    (weeks[d]||[]).forEach(r => {
+      const t = String(r.t||"").trim(), n = Number(r.n);
+      if (!t || !(n>0)) return;
+      const k = keyOf(r), e = m.get(k);
+      if (e) e.streams += n; else m.set(k, { key:k, t, a:String(r.a||"").trim(), streams:n });
+    });
+    const list = [...m.values()].sort((x,y) => y.streams-x.streams
+      || ((prev && prev.byKey.has(x.key) ? prev.byKey.get(x.key).rank : 1e9) - (prev && prev.byKey.has(y.key) ? prev.byKey.get(y.key).rank : 1e9))
+      || x.t.localeCompare(y.t));
+    list.forEach((e,i) => { e.rank = i+1; });
+    out[d] = { list, byKey:m, date:d }; prev = out[d];
+  });
+  return out;
+}
+// The chart for one week: the top N, each with last week, peak, weeks on chart and movement.
+function chartFor(date, N){
+  const ranks = computeRanks(), ws = sortedWeeks(), idx = ws.indexOf(date);
+  if (idx<0) return [];
+  const prev = idx>0 ? ranks[ws[idx-1]] : null;
+  return ranks[date].list.filter(e => e.rank<=N).map(e => {
+    const pe = prev && prev.byKey.get(e.key);
+    const lw = pe && pe.rank<=N ? pe.rank : null;
+    let wks = 0, peak = e.rank, atOne = 0, prevBest = null;
+    for (let i=0;i<=idx;i++){ const x = ranks[ws[i]].byKey.get(e.key); if (x && x.rank<=N){ wks++; if (i<idx && (prevBest==null || x.rank<prevBest)) prevBest = x.rank; if (x.rank<peak) peak = x.rank; if (x.rank===1) atOne++; } }
+    let move;
+    if (lw==null) move = { kind: wks>1 ? "re" : "new" };
+    else if (lw>e.rank) move = { kind:"up", n:lw-e.rank };
+    else if (lw<e.rank) move = { kind:"down", n:e.rank-lw };
+    else move = { kind:"same" };
+    return Object.assign({}, e, { lw, wks, peak, atOne, move, lastStreams: pe ? pe.streams : null,
+      newPeak: prevBest!=null && e.rank<prevBest, rePeak: prevBest!=null && e.rank===prevBest });
+  });
+}
+
+/* ---------------- parsing uploads ---------------- */
+function parseDate(v){
+  const fromParts = (y,m,d) => y+"-"+pad2(m)+"-"+pad2(d);
+  if (v instanceof Date){ const d = new Date(v.getTime()+12*3600*1000); return fromParts(d.getFullYear(), d.getMonth()+1, d.getDate()); }
+  if (typeof v === "number"){ if (v>20000){ const d = new Date(Math.round((v-25569)*86400000)); return fromParts(d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate()); } return null; }
+  if (typeof v === "string"){
+    const t = v.trim(), r = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t);
+    if (r && +r[2]>=1 && +r[2]<=12 && +r[3]>=1 && +r[3]<=31) return fromParts(+r[1], +r[2], +r[3]);
+    const d = new Date(t); if (!isNaN(d)) return fromParts(d.getFullYear(), d.getMonth()+1, d.getDate());
+  }
+  return null;
+}
+function parseCSV(text){
+  const rows=[]; let row=[], f="", q=false;
+  for (let i=0;i<text.length;i++){
+    const c=text[i];
+    if (q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if (c==='"') q=true;
+    else if (c===','){ row.push(f); f=""; }
+    else if (c==='\n'){ row.push(f); rows.push(row); row=[]; f=""; }
+    else if (c!=='\r') f+=c;
+  }
+  if (f.length||row.length){ row.push(f); rows.push(row); }
+  const head = rows.shift()||[]; if(head.length) head[0]=String(head[0]).replace(/^\uFEFF/,"");
+  return rows.filter(r=>r.some(x=>String(x).trim())).map(r=>{ const o={}; head.forEach((h,i)=>o[h]=r[i]); return o; });
+}
+function objsToRows(objs){
+  const out = [];
+  objs.forEach(o => {
+    const keys = Object.keys(o), low = keys.map(k => String(k).trim().toLowerCase());
+    const get = names => { for (const n of names){ const i = low.indexOf(n); if (i>=0) return o[keys[i]]; } return undefined; };
+    const w = parseDate(get(["week","date","week ending"]));
+    const t = get(["title","song","track","name"]);
+    const rawS = get(["streams","plays","listens"]);
+    if (!w || t==null || String(t).trim()==="" || rawS==null || String(rawS).trim()==="") return;
+    const n = Number(String(rawS).replace(/,/g,""));
+    if (!isFinite(n)) return;
+    out.push({ w, t:String(t).trim(), a:String(get(["artist"]) ?? "").trim(), n });
+  });
+  return out;
+}
+function applyRows(rows, replace){
+  if (replace) weeks = {};
+  const seen = new Set();
+  rows.forEach(r => {
+    const list = (weeks[r.w] ||= []), k = keyOf(r), sk = r.w+"|"+k;
+    const ex = list.find(x => keyOf(x)===k);
+    if (ex) ex.n = seen.has(sk) ? (Number(ex.n)||0)+r.n : r.n; else list.push({ t:r.t, a:r.a, n:r.n });
+    seen.add(sk);
+  });
+  ui.week = rows.map(r=>r.w).sort().pop(); titleDirty = false; subDirty = false;
+}
+$("file").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const isCsv = /\.csv$/i.test(f.name), msg = $("loadMsg");
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try{
+      let rows = [];
+      if (isCsv) rows = objsToRows(parseCSV(ev.target.result));
+      else {
+        if (typeof XLSX==="undefined"){ msg.textContent = "Couldn't load the spreadsheet reader (needs an internet connection). Try saving the sheet as .csv."; return; }
+        const wb = XLSX.read(ev.target.result, { type:"array", cellDates:true });
+        wb.SheetNames.forEach(n => { rows = rows.concat(objsToRows(XLSX.utils.sheet_to_json(wb.Sheets[n], { raw:true }))); });
+      }
+      if (!rows.length) throw new Error("no rows");
+      applyRows(rows, $("replace").checked);
+      msg.textContent = `Loaded ${rows.length} rows from ${f.name} across ${new Set(rows.map(r=>r.w)).size} week${new Set(rows.map(r=>r.w)).size===1?"":"s"}.`;
+      refreshAll();
+    }catch(err){
+      msg.textContent = "Couldn't read that file. It needs columns named Week, Title and Streams (Artist is optional).";
+    }
+    e.target.value = "";
+  };
+  isCsv ? rd.readAsText(f) : rd.readAsArrayBuffer(f);
+});
+
+/* ---------------- weeks ---------------- */
+function defaultNewWeek(){ const ws = sortedWeeks(); return ws.length ? addDays(ws[ws.length-1], 7) : toIso(new Date()); }
+function fillWeeks(){
+  ensureSel();
+  const ws = sortedWeeks().reverse();
+  $("week").innerHTML = ws.length ? ws.map(d => `<option value="${d}" ${d===ui.week?"selected":""}>${esc(fmtDate(d))}</option>`).join("") : '<option value="">(none yet)</option>';
+  $("delWeek").disabled = !ws.length;
+  if (!$("newWeek").value || document.activeElement!==$("newWeek")) $("newWeek").value = defaultNewWeek();
+}
+$("week").addEventListener("change", () => { ui.week = $("week").value; titleDirty = false; subDirty = false; refreshAll(); });
+$("addWeek").addEventListener("click", () => {
+  const v = $("newWeek").value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)){ $("dataMsg").textContent = "Pick the date the week ends."; return; }
+  if (!weeks[v]){
+    let list = [];
+    const before = sortedWeeks().filter(d => d<v).pop();
+    if ($("carry").checked && before){
+      const seen = new Set();
+      weeks[before].forEach(r => { const k = keyOf(r); if (String(r.t||"").trim() && !seen.has(k)){ seen.add(k); list.push({ t:r.t, a:r.a||"", n:null }); } });
+    }
+    weeks[v] = list;
+  }
+  ui.week = v; subDirty = false; $("dataMsg").textContent = ""; refreshAll();
+});
+$("delWeek").addEventListener("click", () => { if (ui.week) delete weeks[ui.week]; ui.week = null; subDirty = false; refreshAll(); });
+$("spBtn").addEventListener("click", ()=>{
+  SpotifyImport.open({ mode:"chart", onImport:(res, msg)=>{
+    if ($("replace").checked) weeks = res; else Object.assign(weeks, res);
+    ui.week = Object.keys(res).sort().pop(); titleDirty = false; subDirty = false;
+    $("loadMsg").textContent = msg; refreshAll();
+  }});
+});
+$("clearAll").addEventListener("click", () => { weeks = {}; ui.week = null; titleDirty = false; subDirty = false; $("dataMsg").textContent = "Cleared."; refreshAll(); });
+
+/* ---------------- week editor ---------------- */
+const curList = () => weeks[ui.week];
+function renderGrid(){
+  const list = curList();
+  if (!list){ $("grid").innerHTML = '<div class="msg" style="padding:12px">No weeks yet. Add one above or upload a sheet.</div>'; return; }
+  let h = '<table class="grid"><thead><tr><th class="left">Title</th><th class="left">Artist</th><th>Streams</th><th></th></tr></thead><tbody>';
+  if (!list.length) h += '<tr><td colspan="4" class="msg" style="padding:12px">No songs in this week yet. Add one below or paste a list.</td></tr>';
+  list.forEach((r,i) => {
+    h += `<tr><td class="t"><input class="tcell" data-i="${i}" data-f="t" list="titleList" value="${esc(r.t||"")}" aria-label="Title"></td>
+      <td class="a"><input class="tcell" data-i="${i}" data-f="a" list="artistList" value="${esc(r.a||"")}" aria-label="Artist"></td>
+      <td class="n"><input class="cell" inputmode="decimal" data-i="${i}" data-f="n" value="${r.n==null?"":r.n}" aria-label="Streams"></td>
+      <td><button class="danger small" data-act="del" data-i="${i}">Remove</button></td></tr>`;
+  });
+  $("grid").innerHTML = h + "</tbody></table>";
+  fillLists();
+}
+function fillLists(){
+  const ts = new Set(), as = new Set();
+  Object.values(weeks).forEach(l => l.forEach(r => { if (r.t) ts.add(r.t); if (r.a) as.add(r.a); }));
+  $("titleList").innerHTML = [...ts].map(x => `<option value="${esc(x)}">`).join("");
+  $("artistList").innerHTML = [...as].map(x => `<option value="${esc(x)}">`).join("");
+}
+$("grid").addEventListener("input", e => {
+  const t = e.target, f = t.dataset.f; if (!f) return;
+  const r = curList()[+t.dataset.i]; if (!r) return;
+  r[f] = f==="n" ? parseNum(t.value) : t.value;
+  persist(); renderChart();
+});
+$("grid").addEventListener("change", fillLists);
+$("grid").addEventListener("keydown", e => {
+  if (e.key!=="Enter" || e.target.dataset.f!=="n") return;
+  const list = curList(); if (!list || +e.target.dataset.i !== list.length-1) return;
+  e.preventDefault(); addSong();
+});
+$("grid").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.act!=="del") return;
+  curList().splice(+b.dataset.i, 1); refreshAll();
+});
+function addSong(){
+  if (!curList()){ $("dataMsg").textContent = "Add a week first."; return; }
+  curList().push({ t:"", a:"", n:null }); persist(); renderGrid();
+  const rows = $("grid").querySelectorAll('input[data-f="t"]'); if (rows.length) rows[rows.length-1].focus();
+}
+$("addSong").addEventListener("click", addSong);
+$("sortSongs").addEventListener("click", () => {
+  const l = curList(); if (!l) return;
+  l.sort((a,b) => (Number(b.n)||0) - (Number(a.n)||0)); refreshAll();
+});
+$("pasteGo").addEventListener("click", () => {
+  const l = curList(), msg = $("pasteMsg");
+  if (!l){ msg.textContent = "Add a week first."; return; }
+  let added = 0, updated = 0;
+  $("pasteBox").value.replace(/\r/g,"").split("\n").forEach(line => {
+    if (!line.trim()) return;
+    const f = (line.includes("\t") ? line.split("\t") : line.split(",")).map(x => x.trim());
+    if (f.length<2) return;
+    const n = parseNum(f[f.length-1]); if (n==null) return;
+    const t = f[0], a = f.length>=3 ? f.slice(1,-1).join(", ") : "";
+    if (!t) return;
+    // with no artist given, match a song of that title by any artist
+    const ex = l.find(x => keyOf(x)===keyOf({t,a})) || (!a && l.find(x => String(x.t||"").trim().toLowerCase()===t.toLowerCase()));
+    if (ex){ ex.n = n; updated++; } else { l.push({ t, a, n }); added++; }
+  });
+  if (!added && !updated){ msg.textContent = "Nothing to add. Each line needs a title and a number of streams."; return; }
+  msg.textContent = `Added ${added} song${added===1?"":"s"}${updated?` and updated ${updated}`:""}.`; $("pasteBox").value = ""; refreshAll();
+});
+
+/* ---------------- export ---------------- */
+function longRows(){
+  const rows = [["Week","Title","Artist","Streams"]];
+  sortedWeeks().forEach(d => weeks[d].forEach(r => { if (String(r.t||"").trim() && r.n!=null) rows.push([d, r.t, r.a||"", r.n]); }));
+  return rows;
+}
+const toCSV = rows => rows.map(r=>r.map(c=>{ const s=String(c); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(",")).join("\n");
+function saveBlob(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+$("expCsv").addEventListener("click", () => {
+  saveBlob(new Blob([toCSV(longRows())],{type:"text/csv"}), "weekly-streams.csv");
+  $("dataMsg").textContent = "If nothing downloaded, use 'Copy as CSV' instead.";
+});
+$("expXlsx").addEventListener("click", () => {
+  if (typeof XLSX==="undefined"){ $("dataMsg").textContent = "Spreadsheet export needs an internet connection. Use .csv instead."; return; }
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(longRows()), "Weekly streams");
+  saveBlob(new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/octet-stream"}), "weekly-streams.xlsx");
+  $("dataMsg").textContent = "If nothing downloaded, use 'Copy as CSV' instead.";
+});
+$("copyCsv").addEventListener("click", async () => {
+  const txt = toCSV(longRows());
+  try{ await navigator.clipboard.writeText(txt); $("dataMsg").textContent = "Copied. Paste into a spreadsheet or a .csv file."; }
+  catch(e){
+    const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); $("dataMsg").textContent = "Copied. Paste into a spreadsheet or a .csv file."; }catch(_){ $("dataMsg").textContent = "Couldn't copy here."; }
+    ta.remove();
+  }
+});
+$("tpl").addEventListener("click", () => {
+  const t = "Week,Title,Artist,Streams\n2026-10-01,First Song,My Artist,32\n2026-10-01,Second Song,My Artist,21\n2026-10-08,First Song,My Artist,28\n2026-10-08,Second Song,My Artist,35\n";
+  saveBlob(new Blob([t],{type:"text/csv"}), "weekly-streams-template.csv");
+});
+
+/* ---------------- chart ---------------- */
+function renderChart(){
+  const th = theme(), F = FONTS[has(FONTS, style.font) ? style.font : "serif"].stack;
+  const date = ui.week, N = ui.size, SHOW = Math.min(ui.show, N);
+  const rows = date && weeks[date] ? chartFor(date, N).filter(r => r.rank<=SHOW) : [];
+  if (!titleDirty) $("title").value = "My Hot " + N + (SHOW<N ? ": Top " + SHOW : "");
+  if (!subDirty) $("subtitle").value = date ? "Week ending " + fmtDate(date) : "";
+
+  const W = 1000, padX = 56, headTop = 44, headH = 112, colHeadH = 40;
+  const useKey = ui.cRows || ui.cPeak, footH = useKey ? 112 : 72;
+  const BLUE = th.dark ? "#7FA8E0" : "#5B8FD1", PURPLE = th.dark ? "#B49AE0" : "#9B79C9", YELLOW = th.dark ? "#E8C25A" : "#E3B23C";
+  const cols = [];   // right-hand stat columns, drawn right to left
+  if (ui.streams) cols.push({ id:"streams", w:128, head:"STREAMS" });
+  if (ui.wks)     cols.push({ id:"wks",     w:76,  head:"WKS" });
+  if (ui.peak)    cols.push({ id:"peak",    w:76,  head:"PEAK" });
+  if (ui.lw)      cols.push({ id:"lw",      w:76,  head:"LW" });
+  const statsW = cols.reduce((a,c)=>a+c.w, 0);
+  const xRank = padX, xMove = padX+74, xTitle = padX + 78 + (ui.move ? 112 : 0);
+  const xStats = W - padX - statsW, titleW = xStats - xTitle - 32;
+  const rowH = i => i===0 ? 96 : 72;
+  const bodyH = rows.reduce((a,_,i)=>a+rowH(i), 0) || 90;
+  const H = headTop + headH + colHeadH + bodyH + footH;
+  sizeCanvas(W, H, th);
+
+  ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  let tsize = 46; ctx.font = `700 ${tsize}px ${F}`;
+  const title = $("title").value;
+  while (tsize>24 && ctx.measureText(title).width > W-padX*2){ tsize-=2; ctx.font = `700 ${tsize}px ${F}`; }
+  ctx.fillStyle = th.INK; ctx.fillText(title, padX, headTop+44);
+  ctx.fillStyle = th.MUTED; ctx.font = `italic 21px ${F}`;
+  let sub = $("subtitle").value; while (sub.length>1 && ctx.measureText(sub).width > W-padX*2){ sub = sub.slice(0,-1).trimEnd(); }
+  ctx.fillText(sub, padX, headTop+80);
+
+  const y0 = headTop + headH;
+  ctx.font = `italic 600 14px ${F}`; ctx.fillStyle = th.MUTED; ctx.textAlign = "center";
+  let cx = xStats;
+  cols.slice().reverse().forEach(c => { if (rows.length) ctx.fillText(c.head, cx + c.w/2, y0+24); c.x = cx; cx += c.w; });
+  ctx.fillStyle = rgba(th.INK,0.4); ctx.fillRect(padX, y0+colHeadH-4, W-padX*2, 1.5);
+
+  if (!rows.length){
+    ctx.textAlign = "left"; ctx.fillStyle = th.MUTED; ctx.font = `italic 20px ${F}`;
+    ctx.fillText(date ? "No songs with streams in this week yet." : "No data yet. Add a week and enter some streams above.", padX, y0+colHeadH+44);
+  }
+  let yy = y0 + colHeadH;
+  rows.forEach((r,i) => {
+    const first = i===0, h = rowH(i), mid = yy + h/2;
+    if (first){ ctx.fillStyle = rgba(th.INK,0.07); rr(padX-16, yy+4, W-padX*2+32, h-8, 18); ctx.fill(); }
+    else { ctx.fillStyle = rgba(th.INK,0.13); ctx.fillRect(padX, yy-0.75, W-padX*2, 1.5); }
+    // title tint by movement
+    if (ui.cRows && r.move.kind!=="same"){
+      const tc = r.move.kind==="up" ? th.POS : r.move.kind==="down" ? th.NEG : r.move.kind==="new" ? BLUE : PURPLE;
+      ctx.fillStyle = rgba(tc, th.dark ? 0.26 : 0.22); rr(xTitle-14, yy+(first?9:7), titleW+28, h-(first?18:14), 12); ctx.fill();
+    }
+    // position
+    ctx.fillStyle = th.INK; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `700 ${first?52:36}px ${F}`;
+    ctx.fillText(String(r.rank), xRank+30, mid+1);
+    // movement
+    if (ui.move){
+      const mx = xMove + 40;
+      ctx.font = `700 15px ${F}`;
+      if (r.move.kind==="up" || r.move.kind==="down"){
+        const up = r.move.kind==="up", col = up ? th.POS : th.NEG, txt = th.POSTXT && (up ? th.POSTXT : th.NEGTXT);
+        ctx.fillStyle = rgba(col, 0.22); rr(mx-33, mid-14, 66, 28, 14); ctx.fill();
+        const tw = ctx.measureText(String(r.move.n)).width, total = 12 + 6 + tw, x0 = mx - total/2;
+        ctx.fillStyle = txt; ctx.beginPath();
+        if (up){ ctx.moveTo(x0+6, mid-5); ctx.lineTo(x0+12, mid+4); ctx.lineTo(x0, mid+4); }
+        else   { ctx.moveTo(x0, mid-4); ctx.lineTo(x0+12, mid-4); ctx.lineTo(x0+6, mid+5); }
+        ctx.closePath(); ctx.fill();
+        ctx.textAlign = "left"; ctx.fillText(String(r.move.n), x0+18, mid+1);
+      } else if (r.move.kind==="new"){
+        ctx.fillStyle = th.INK; rr(mx-33, mid-14, 66, 28, 14); ctx.fill();
+        ctx.fillStyle = th.BG; ctx.font = `700 13px ${F}`; ctx.textAlign = "center"; ctx.fillText("NEW", mx, mid+1);
+      } else if (r.move.kind==="re"){
+        ctx.strokeStyle = th.INK; ctx.lineWidth = 1.5; rr(mx-39, mid-14, 78, 28, 14); ctx.stroke();
+        ctx.fillStyle = th.INK; ctx.font = `700 12px ${F}`; ctx.textAlign = "center"; ctx.fillText("RE-ENTRY", mx, mid+1);
+      } else {
+        ctx.fillStyle = th.MUTED; ctx.font = `600 20px ${F}`; ctx.textAlign = "center"; ctx.fillText("—", mx, mid+1);
+      }
+    }
+    // title + artist
+    const tsz = first ? 27 : 22, asz = first ? 18 : 16;
+    const subline = [r.a, first && r.atOne>1 ? `${r.atOne} weeks at No. 1` : ""].filter(Boolean).join("  ·  ");
+    const ell = (s, w) => { if (ctx.measureText(s).width<=w) return s; while (s.length>1 && ctx.measureText(s+"…").width>w) s = s.slice(0,-1).trimEnd(); return s+"…"; };
+    ctx.textAlign = "left"; ctx.fillStyle = th.INK; ctx.font = `700 ${tsz}px ${F}`;
+    ctx.fillText(ell(r.t, titleW), xTitle, subline ? mid-9 : mid+1);
+    if (subline){ ctx.fillStyle = th.MUTED; ctx.font = `italic ${asz}px ${F}`; ctx.fillText(ell(subline, titleW), xTitle, mid+(first?20:17)); }
+    // stats
+    cols.forEach(c => {
+      const sx = c.x + c.w/2; ctx.textAlign = "center";
+      if (c.id==="streams"){
+        if (ui.cStreams && r.lastStreams!=null && r.lastStreams>0){
+          const p0 = (r.streams - r.lastStreams)/r.lastStreams*100;
+          if (Math.abs(p0)>=0.5){ ctx.fillStyle = rgba(p0>0 ? th.POS : th.NEG, 0.16 + Math.min(Math.abs(p0)/150,1)*0.42); rr(c.x+8, yy+(first?9:7), c.w-16, h-(first?18:14), 12); ctx.fill(); }
+        }
+        ctx.fillStyle = th.INK; ctx.font = `700 ${first?26:22}px ${F}`;
+        const hasCh = r.lastStreams!=null && r.lastStreams>0;
+        ctx.fillText(Math.round(r.streams).toLocaleString("en-US"), sx, hasCh ? mid-8 : mid+1);
+        if (hasCh){
+          const p = (r.streams - r.lastStreams)/r.lastStreams*100;
+          ctx.font = `italic 600 14px ${F}`; ctx.fillStyle = Math.abs(p)<0.5 ? th.MUTED : (p>0 ? th.POSTXT : th.NEGTXT);
+          ctx.fillText(Math.abs(p)<0.5 ? "0%" : fmtPct(p), sx, mid+(first?20:16));
+        }
+      } else {
+        if (c.id==="peak" && ui.cPeak && (r.newPeak || r.rePeak)){
+          ctx.fillStyle = rgba(r.newPeak ? BLUE : YELLOW, th.dark ? 0.5 : 0.45); rr(c.x+8, mid-19, c.w-16, 38, 12); ctx.fill();
+        }
+        const v = c.id==="lw" ? r.lw : c.id==="peak" ? r.peak : r.wks;
+        ctx.fillStyle = v==null ? th.MUTED : th.INK; ctx.font = `${c.id==="peak" && v===1 ? 800 : 600} ${first?24:20}px ${F}`;
+        ctx.fillText(v==null ? "—" : String(v), sx, mid+1);
+      }
+    });
+    yy += h;
+  });
+  if (!rows.length) yy += 90;
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = th.MUTED; ctx.font = `italic 16px ${F}`;
+  const bits = ["Ranked by streams that week."];
+  const keys = []; if (ui.lw) keys.push("LW = last week"); if (ui.peak) keys.push("PEAK = best position"); if (ui.wks) keys.push("WKS = weeks on chart");
+  ctx.fillText(bits.concat(keys.length ? [keys.join(", ")+"."] : []).join(" "), padX, H - (useKey ? 78 : 40));
+  if (useKey){
+    // colour key
+    let kx = padX; const ky = H - 44;
+    ctx.font = `italic 15px ${F}`; ctx.textBaseline = "middle";
+    const item = (col, label, sq) => {
+      ctx.fillStyle = col; ctx.beginPath(); if (sq) rr(kx, ky-7, 14, 14, 4); else ctx.arc(kx+7, ky, 7, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = th.MUTED; ctx.fillText(label, kx+20, ky); kx += 20 + ctx.measureText(label).width + 18;
+    };
+    if (ui.cRows){ item(th.POS, "up"); item(BLUE, "new"); item(PURPLE, "re-entry"); item(th.NEG, "down"); }
+    if (ui.cRows && ui.cPeak){ kx += 14; }
+    if (ui.cPeak){ item(BLUE, "new peak", true); item(YELLOW, "tied peak", true); }
+  }
+  showImg(W);
+}
+
+/* ---------------- save PNG ---------------- */
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "chart";
+const fileName = () => `personal-chart-${ui.week || "empty"}.png`;
+$("dl").addEventListener("click", () => { canvas.toBlob(b => saveBlob(b, fileName()), "image/png"); });
+if (navigator.share) $("share").style.display = "";
+$("share").addEventListener("click", () => {
+  canvas.toBlob(b => {
+    const f = new File([b], fileName(), { type:"image/png" });
+    if (navigator.canShare && navigator.canShare({files:[f]})) navigator.share({files:[f]}).catch(()=>{});
+    else $("dlMsg").textContent = "Sharing isn't supported here. Press and hold the image to save it.";
+  });
+});
+
+/* ---------------- wiring ---------------- */
+function refreshAll(){ fillWeeks(); renderGrid(); syncOpts(); persist(); renderChart(); }
+function syncOpts(){
+  $("size").value = String(ui.size); $("show").value = String(Math.min(ui.show, ui.size));
+  [["showMove","move"],["showLW","lw"],["showPeak","peak"],["showWks","wks"],["showStreams","streams"],["cStreams","cStreams"],["cPeak","cPeak"],["cRows","cRows"]].forEach(([id,k]) => { $(id).checked = !!ui[k]; });
+}
+$("title").addEventListener("input", () => { titleDirty = true; renderChart(); });
+$("subtitle").addEventListener("input", () => { subDirty = true; renderChart(); });
+$("autoTitle").addEventListener("click", () => { titleDirty = false; subDirty = false; renderChart(); });
+$("size").addEventListener("change", () => { ui.size = Number($("size").value); if (ui.show>ui.size) ui.show = ui.size; syncOpts(); persist(); renderChart(); });
+$("show").addEventListener("change", () => { ui.show = Number($("show").value); persist(); renderChart(); });
+[["showMove","move"],["showLW","lw"],["showPeak","peak"],["showWks","wks"],["showStreams","streams"],["cStreams","cStreams"],["cPeak","cPeak"],["cRows","cRows"]].forEach(([id,k]) => {
+  $(id).addEventListener("change", () => { ui[k] = $(id).checked; persist(); renderChart(); });
+});
+
+buildChips();
+if (!loadSaved()) weeks = sampleWeeks();
+paintChips();
+refreshAll();
+
+</script>
+<script>
+(function(){var b=document.getElementById('themeBtn');if(!b)return;
+function cur(){return document.documentElement.dataset.theme==='dark'?'dark':'light'}
+function sync(){var d=cur()==='dark';b.setAttribute('aria-pressed',String(d));b.title=d?'Switch to light theme':'Switch to dark theme';b.setAttribute('aria-label',b.title)}
+b.addEventListener('click',function(){var n=cur()==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('musicTools.theme',n)}catch(e){}sync()});
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(e){if(!localStorage.getItem('musicTools.theme')){document.documentElement.dataset.theme=e.matches?'dark':'light';sync()}})}catch(e){}
+sync()})();
+</script>
+<script src="../spotify.js"></script>
+<script src="../tools.js"></script>
+</body>
+</html>

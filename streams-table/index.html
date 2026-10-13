@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streams Table Maker</title>
+<script>try{var t=localStorage.getItem('musicTools.theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+  :root {
+    --ink:#4A3F3B; --muted:#85766D; --page:#EFE7D8; --paper:#FBF8F1; --field:#FFFDF8;
+    --line:#DDD2BF; --soft:#F3ECDD; --focus:#8B6FA8; --danger:#A3281F;
+    --serif:"Palatino Linotype",Palatino,"Book Antiqua","Iowan Old Style","Times New Roman",serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font-family:var(--serif); font-size:17px; line-height:1.45; }
+  .wrap { max-width:1100px; margin:0 auto; padding:32px 24px 56px; }
+  h1 { font-size:32px; line-height:1.15; margin:0 0 6px; }
+  .sub { color:var(--muted); font-style:italic; margin:0 0 24px; }
+  .homelink { display:inline-block; margin:0 0 12px; color:var(--muted); text-decoration:none; font-size:15px; border-radius:6px; }
+  .homelink:hover { color:var(--ink); text-decoration:underline; }
+  .card { background:var(--paper); border-radius:16px; padding:20px; margin-bottom:16px; }
+  .card h2 { font-size:19px; margin:0 0 14px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:10px; }
+  .row:last-child { margin-bottom:0; }
+  label { font-size:15px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  label:has(> input[type=checkbox]) { color:var(--ink); font-size:16px; cursor:pointer; }
+  input[type=checkbox] { width:20px; height:20px; margin:0; accent-color:var(--ink); cursor:pointer; }
+  input[type=text], input[type=number], select {
+    font:inherit; font-size:16px; color:var(--ink); background:var(--field);
+    border:1px solid var(--line); border-radius:10px; padding:9px 12px;
+  }
+  input[type=text] { width:230px; max-width:100%; }
+  input[type=number] { width:84px; }
+  select { max-width:230px; }
+  #title { width:min(420px, calc(100vw - 130px)); }
+  input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible, .filebtn:focus-within {
+    outline:3px solid var(--focus); outline-offset:1px;
+  }
+  button, .filebtn {
+    font:inherit; font-size:17px; font-weight:700; cursor:pointer; display:inline-block;
+    background:var(--ink); color:var(--on-ink); border:1px solid var(--ink); border-radius:10px; padding:13px 22px;
+  }
+  button:hover { background:var(--btn-hover); }
+  button.alt, .filebtn { background:var(--field); color:var(--ink); border:1px solid var(--line); padding:10px 16px; font-size:16px; }
+  button.alt:hover, .filebtn:hover { background:var(--soft); }
+  button.small { padding:6px 12px; font-size:14px; border-radius:8px; }
+  button.danger { background:var(--field); color:var(--danger); border:1px solid var(--danger-line); }
+  button.danger:hover { background:var(--danger-bg); }
+  .msg { font-size:15px; color:var(--muted); font-style:italic; }
+  details > summary { cursor:pointer; font-weight:700; font-size:19px; margin-bottom:14px; border-radius:6px; }
+  .gridwrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--field); }
+  table.grid { border-collapse:separate; border-spacing:0; font-size:14px; }
+  table.grid th, table.grid td { padding:5px; border-bottom:1px solid var(--line); background:var(--field); }
+  table.grid th { position:sticky; top:0; font-weight:700; text-align:center; }
+  table.grid .sticky { position:sticky; left:0; z-index:2; min-width:180px; max-width:180px; text-align:left; border-right:1px solid var(--line); background:var(--paper); }
+  table.grid input.cell { width:76px; font:inherit; font-size:14px; padding:7px 6px; border:1px solid var(--line); border-radius:8px; text-align:right; background:var(--field); color:var(--ink); }
+  table.grid input.aname { width:100%; font:inherit; font-size:15px; font-weight:700; padding:7px 8px; border:1px solid var(--line); border-radius:8px; background:var(--field); color:var(--ink); }
+  table.grid input.cell.prev { background:var(--soft); }
+  table.grid th.prevh { color:var(--muted); background:var(--soft); }
+  .ctl { display:flex; gap:4px; margin-top:6px; }
+  .preview { overflow-x:auto; border-radius:16px; background:var(--paper); box-shadow:0 10px 30px var(--shadow); width:fit-content; max-width:100%; }
+  #img { display:block; max-width:none; }
+  #cv { display:none; }
+  .hint { font-size:15px; color:var(--muted); font-style:italic; margin:10px 0 0; }
+  @media (max-width:600px) { .wrap { padding:20px 16px 48px; } h1 { font-size:28px; } }
+
+  /* ---------- site-wide light / dark theme ---------- */
+  :root { color-scheme:light; --soft:#F3ECDD; --on-ink:#FBF3E4; --btn-hover:#5E504A; --shadow:rgba(74,63,59,.22); --danger-line:#D7ADA7; --danger-bg:#FBEDEA; --toc-hover:rgba(251,248,241,.8); }
+  :root[data-theme="dark"] {
+    color-scheme:dark;
+    --ink:#EDE3D3; --ink-soft:#A99C8F; --muted:#A99C8F; --page:#171311; --panel:#221D1A; --paper:#221D1A; --field:#2B2521;
+    --line:#3D342E; --soft:#332B26; --focus:#B79BD6; --danger:#F29A90;
+    --on-ink:#1B1613; --btn-hover:#FFF6E6; --shadow:rgba(0,0,0,.55); --danger-line:#6B3E39; --danger-bg:#3A2522; --toc-hover:rgba(34,29,26,.85);
+  }
+  body { position:relative; }
+  .themebtn { position:fixed; bottom:16px; right:16px; z-index:40; box-shadow:0 4px 14px var(--shadow) !important; width:40px; height:40px; padding:0; display:grid; place-items:center; border-radius:50%; border:1px solid var(--line); background:var(--field); color:var(--ink); cursor:pointer; line-height:0; box-shadow:none; font-size:0; }
+  .themebtn:hover { background:var(--soft); }
+  .themebtn svg { width:20px; height:20px; }
+  .themebtn .i-sun { display:none; }
+  :root[data-theme="dark"] .themebtn .i-sun { display:block; }
+  :root[data-theme="dark"] .themebtn .i-moon { display:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { display:flex; align-items:center; gap:8px; padding:6px 14px 6px 6px; border-radius:12px; border:1.5px solid var(--line); background:var(--field); color:var(--ink); font:inherit; font-size:15px; font-weight:400; cursor:pointer; }
+  .chip:hover { background:var(--soft); }
+  .chip[aria-pressed="true"] { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); font-weight:700; }
+  .chip .sw-theme { width:34px; height:34px; border-radius:8px; border:1px solid rgba(74,63,59,.25); display:grid; place-items:center; font-size:16px; font-weight:700; }
+  .kindchip { padding:8px 18px; }
+  .style-group { margin:4px 0 14px; }
+  .style-group h3 { font-size:15px; margin:0 0 8px; color:var(--muted); font-weight:400; font-style:italic; }
+  .custom-row { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; }
+  .custom-row[hidden] { display:none; }
+  input[type="color"] { width:44px; height:36px; padding:2px; cursor:pointer; border:1px solid var(--line); border-radius:8px; background:var(--field); }
+</style>
+</head>
+<body>
+<button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark theme" title="Switch to dark theme"><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+
+<div class="wrap">
+  <a class="homelink" href="../index.html">← All tools</a>
+  <h1>Streams Table Maker</h1>
+  <p class="sub">Make a shareable PNG of average daily streams by month, with green/red change, for albums, songs or artists. Upload a streams sheet or type the numbers in.</p>
+
+  <!-- DATA -->
+  <div class="card">
+    <h2>1. Data</h2>
+    <div class="row">
+      <span id="kindLabel">Table of</span>
+      <div class="chips" id="kindChips" role="group" aria-labelledby="kindLabel"></div>
+    </div>
+    <div class="row">
+      <label class="filebtn">Upload sheet (.xlsx / .csv)
+        <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+      </label>
+      <label><input type="checkbox" id="replace" checked> Replace existing data</label>
+      <button class="alt small" id="tpl">Download template</button>
+      <button class="alt small" id="spBtn">Import from Spotify</button>
+    </div>
+    <div class="msg" id="loadMsg"></div>
+    <div class="row" id="artistRow" style="margin-top:10px">
+      <label>Artist <select id="artist"></select></label>
+      <label>Name <input type="text" id="artistName"></label>
+      <button class="alt small" id="addArtist">+ Artist</button>
+      <button class="danger small" id="delArtist">Delete artist</button>
+    </div>
+    <div class="row">
+      <label>Year <select id="year"></select></label>
+      <label>Add year <input type="number" id="newYear" placeholder="2025"></label>
+      <button class="alt small" id="addYear">Add</button>
+    </div>
+    <div class="row">
+      <button class="alt small" id="expCsv">Export data (.csv)</button>
+      <button class="alt small" id="expXlsx">Export data (.xlsx)</button>
+      <button class="alt small" id="copyCsv">Copy as CSV</button>
+      <button class="danger small" id="clearAll">Clear all data</button>
+      <span class="msg" id="dataMsg"></span>
+    </div>
+  </div>
+
+  <!-- EDITOR -->
+  <div class="card">
+    <details open>
+      <summary>2. Enter / edit streams (monthly totals)</summary>
+      <div class="gridwrap" id="grid"></div>
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="newAlbum">
+        <button class="alt small" id="addAlbum"></button>
+      </div>
+      <p class="hint">Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in "Entry order"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
+    </details>
+  </div>
+
+  <!-- OPTIONS -->
+  <div class="card">
+    <h2>3. Chart</h2>
+    <div class="row">
+      <label>Title <input type="text" id="title"></label>
+      <button class="alt small" id="autoTitle">Auto title</button>
+    </div>
+    <div class="row">
+      <label>Show
+        <select id="metric">
+          <option value="avg">Avg per day</option>
+          <option value="total">Monthly total</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="showPct" checked> % change</label>
+      <label><input type="checkbox" id="showLast" checked> Include last month</label>
+      <label>Days in last month <input type="number" id="lastDays" min="1" max="31"></label>
+      <label>Sort
+        <select id="sort">
+          <option value="entry">Entry order</option>
+          <option value="total">Total streams</option>
+          <option value="az">A–Z</option>
+        </select>
+      </label>
+    </div>
+    <div class="style-group"><h3>Background</h3>
+      <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
+      <div class="custom-row" id="customTheme" hidden>
+        <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
+        <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
+      </div>
+    </div>
+    <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+    <div class="row">
+      <button id="dl">Download PNG</button>
+      <button id="share" class="alt" style="display:none">Share / Save</button>
+      <span class="msg" id="dlMsg">If the download doesn't start, press and hold the image to save it.</span>
+    </div>
+  </div>
+
+  <div class="preview"><img id="img" alt="Streams table"></div>
+  <canvas id="cv"></canvas>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const LS_KEY = "streamsTables.v1";
+const LEGACY = { albums:"streamsTableMaker.v1", artists:"artistStreamsTable.v1" };   // saved by the two earlier, separate tools
+const GROUP = "Artists";   // the artists table has one list of rows; it is stored under this single key
+const KIND_IDS = ["albums","songs","artists"];
+const KINDS = {
+  albums:  { label:"Albums",  one:"album",  One:"Album",  many:"albums",  grouped:true,  names:["album","release","title"],
+             cols:"Columns needed: Month, Album, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
+  songs:   { label:"Songs",   one:"song",   One:"Song",   many:"songs",   grouped:true,  names:["song","track","title"],
+             cols:"Columns needed: Month, Song, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
+  artists: { label:"Artists", one:"artist", One:"Artist", many:"artists", grouped:false, names:["artist","name"],
+             cols:"Columns needed: Month, Artist, Streams. Each artist becomes a row in the table." }
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+const daysIn = (y,m) => new Date(y,m,0).getDate();
+const emptyArr = () => Array(12).fill(null);
+const canvas = $("cv"), ctx = canvas.getContext("2d"), S = 2;
+
+let kind = "albums";
+const data = { albums:{artists:{}}, songs:{artists:{}}, artists:{artists:{}} };
+const uis = { albums:{artist:null,year:null}, songs:{artist:null,year:null}, artists:{artist:null,year:null} };
+let state = data.albums, ui = uis.albums;
+const K = () => KINDS[kind];
+let titleDirty = false, lastDaysKey = "";
+
+/* ---------------- state ---------------- */
+function sampleFor(k){
+  const y = new Date().getFullYear();
+  const mk = a => a.concat(Array(12-a.length).fill(null));
+  // Placeholder numbers: one listener's plausible monthly plays, not real data. Dec of the previous year is included so the % change column has something to compare with.
+  const build = (group, rows) => {
+    const prev = {}, cur = {};
+    rows.forEach(([n,dec,v]) => { prev[n] = Array(11).fill(null).concat([dec]); cur[n] = mk(v); });
+    return { artists: { [group]: { order: rows.map(r=>r[0]), years: { [y-1]:prev, [y]:cur } } } };
+  };
+  if (k==="songs") return build("Laufey", [
+    ["From the Start",31,[33,29,30,38,31,28]], ["Falling Behind",24,[26,22,25,29,24,21]],
+    ["Valentine",19,[21,18,20,24,19,17]], ["Lover Girl",12,[18,16,21,34,27,22]] ]);
+  if (k==="artists") return build(GROUP, [
+    ["Laufey",410,[385,342,360,455,398,372]], ["Taylor Swift",160,[148,130,152,141,126,135]],
+    ["Sabrina Carpenter",205,[192,170,188,214,196,183]], ["Madison Beer",85,[78,64,92,71,80,67]] ]);
+  return build("Laufey", [
+    ["Typical of Me",52,[55,48,51,60,46,44]], ["Everything I Know About Love",80,[85,76,79,92,81,77]],
+    ["Bewitched",118,[120,104,112,128,109,102]], ["A Matter of Time",98,[95,82,88,118,96,90]] ]);
+}
+// Saved data that is just an earlier built-in example gives way to the current one.
+function isOldSample(k, st){
+  const a = st && st.artists, keys = a && Object.keys(a);
+  if (!keys || keys.length!==1) return false;
+  const g = a[keys[0]], o = JSON.stringify(g.order), big = lim => Object.values(g.years||{}).some(yr=>Object.values(yr).some(r=>(r||[]).some(v=>v>=lim)));
+  if (k==="albums") return (keys[0]==="Sample Artist" && o==='["First Album","Second Album","Third Album"]') || (keys[0]==="Laufey" && big(1e6));
+  if (k==="artists") return o==='["Artist One","Artist Two","Artist Three","Artist Four"]' || (o==='["Laufey","Taylor Swift","Sabrina Carpenter","Madison Beer"]' && big(1e7));
+  return false;
+}
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({kind, data, uis, style})); }catch(e){} }
+function readStyle(st){
+  st = st || {};
+  if (has(THEMES, st.themeId)) style.themeId=st.themeId;
+  if (has(FONTS, st.font)) style.font=st.font;
+  if (st.custom && HEX6.test(st.custom.bg) && HEX6.test(st.custom.ink)) style.custom={bg:st.custom.bg, ink:st.custom.ink};
+}
+const usable = (k, d) => d && d.artists && Object.keys(d.artists).length && !isOldSample(k, d);
+function loadSaved(){
+  KIND_IDS.forEach(k => { data[k] = sampleFor(k); });
+  let saved = false;
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_KEY));
+    if (s && s.data){
+      KIND_IDS.forEach(k => { if (usable(k, s.data[k])) data[k] = s.data[k]; if (s.uis && s.uis[k]) Object.assign(uis[k], s.uis[k]); });
+      if (has(KINDS, s.kind)) kind = s.kind;
+      readStyle(s.style); saved = true;
+    }
+  }catch(e){}
+  if (!saved){
+    // first visit since the two table tools were merged: pick up whatever they saved separately
+    Object.keys(LEGACY).forEach(k => { try{
+      const s = JSON.parse(localStorage.getItem(LEGACY[k]));
+      if (s && usable(k, s.state)){ data[k] = s.state; if (s.ui) Object.assign(uis[k], s.ui); readStyle(s.style); }
+    }catch(e){} });
+  }
+  const q = new URLSearchParams(location.search).get("kind");
+  if (has(KINDS, q)) kind = q;
+  state = data[kind]; ui = uis[kind];
+}
+function ensureSel(){
+  const names = Object.keys(state.artists);
+  if (!names.length){ const n = K().grouped ? "New Artist" : GROUP; state.artists[n] = { order:[], years:{} }; names.push(n); }
+  if (!state.artists[ui.artist]) ui.artist = names[0];
+  const art = state.artists[ui.artist];
+  if (!Object.keys(art.years).length) art.years[new Date().getFullYear()] = {};
+  const years = Object.keys(art.years).map(Number).sort((a,b)=>a-b);
+  if (!years.includes(Number(ui.year))) ui.year = years[years.length-1];
+  ui.year = Number(ui.year);
+}
+const getArt = () => state.artists[ui.artist];
+const getYear = () => (getArt().years[ui.year] ||= {});
+const getArr = name => (getYear()[name] ||= emptyArr());
+
+function parseNum(v){
+  const s = String(v ?? "").replace(/[,\s]/g,"");
+  if (s==="") return null;
+  const n = Number(s);
+  return isFinite(n) && n>=0 ? n : null;
+}
+
+/* ---------------- parsing uploads ---------------- */
+function parseMonth(v){
+  if (v instanceof Date){ const d=new Date(v.getTime()+12*3600*1000); return {y:d.getFullYear(), m:d.getMonth()+1}; }
+  if (typeof v === "number"){ if (v>20000){ const d=new Date(Math.round((v-25569)*86400000)); return {y:d.getUTCFullYear(), m:d.getUTCMonth()+1}; } return null; }
+  if (typeof v === "string"){
+    const t=v.trim(), r=/^(\d{4})-(\d{1,2})/.exec(t);
+    if (r && +r[2]>=1 && +r[2]<=12) return {y:+r[1], m:+r[2]};
+    const d=new Date(t); if(!isNaN(d)) return {y:d.getFullYear(), m:d.getMonth()+1};
+  }
+  return null;
+}
+function parseCSV(text){
+  const rows=[]; let row=[], f="", q=false;
+  for (let i=0;i<text.length;i++){
+    const c=text[i];
+    if (q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if (c==='"') q=true;
+    else if (c===','){ row.push(f); f=""; }
+    else if (c==='\n'){ row.push(f); rows.push(row); row=[]; f=""; }
+    else if (c!=='\r') f+=c;
+  }
+  if (f.length||row.length){ row.push(f); rows.push(row); }
+  const head = rows.shift()||[]; if(head.length) head[0]=String(head[0]).replace(/^\uFEFF/,"");
+  return rows.filter(r=>r.some(x=>String(x).trim())).map(r=>{ const o={}; head.forEach((h,i)=>o[h]=r[i]); return o; });
+}
+function objsToRows(objs, defArtist){
+  const out=[];
+  objs.forEach(o=>{
+    const keys=Object.keys(o), low=keys.map(k=>String(k).trim().toLowerCase());
+    const hasA = K().grouped && low.includes("artist");
+    const get=(names,fb)=>{ for(const n of names){ const i=low.indexOf(n); if(i>=0) return o[keys[i]]; } return fb!==undefined ? o[keys[fb]] : undefined; };
+    const pm = parseMonth(get(["month","date"],0));
+    const album = get(K().names, hasA?undefined:1);
+    const rawS = get(["streams","plays","listens"], hasA?undefined:2);
+    if (!pm || album==null || String(album).trim()==="" || rawS==null || String(rawS).trim()==="") return;
+    const streams = Number(String(rawS).replace(/,/g,""));
+    if (!isFinite(streams)) return;
+    const artist = !K().grouped ? GROUP : (String(get(["artist"]) ?? "").trim() || defArtist);
+    out.push({ artist, y:pm.y, m:pm.m, album:String(album).trim(), streams });
+  });
+  return out;
+}
+const titleCase = s => s.replace(/\b\w/g, c=>c.toUpperCase());
+const cleanName = s => titleCase(String(s).split(" - ")[0].replace(/\.[^.]+$/,"").trim()) || "Artist";
+
+function applyRows(rows, replace){
+  if (replace) state.artists = {};
+  const seen = new Set();
+  rows.forEach(r=>{
+    const art = (state.artists[r.artist] ||= { order:[], years:{} });
+    if (!art.order.includes(r.album)) art.order.push(r.album);
+    const yr = (art.years[r.y] ||= {});
+    const arr = (yr[r.album] ||= emptyArr());
+    const key = [r.artist,r.y,r.m,r.album].join("|");
+    arr[r.m-1] = seen.has(key) && arr[r.m-1]!=null ? arr[r.m-1]+r.streams : r.streams;
+    seen.add(key);
+  });
+  const first = rows[0].artist;
+  ui.artist = first; ui.year = null; titleDirty = false; lastDaysKey = "";
+}
+
+$("file").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const isCsv = /\.csv$/i.test(f.name), msg = $("loadMsg");
+  const rd = new FileReader();
+  rd.onload = ev=>{
+    try{
+      let rows = [];
+      if (isCsv){
+        rows = objsToRows(parseCSV(ev.target.result), cleanName(f.name));
+      } else {
+        if (typeof XLSX==="undefined") { msg.textContent="Couldn't load the spreadsheet reader (needs an internet connection). Try saving the sheet as .csv."; return; }
+        const wb = XLSX.read(ev.target.result,{type:"array",cellDates:true});
+        wb.SheetNames.forEach(n=>{
+          const objs = XLSX.utils.sheet_to_json(wb.Sheets[n],{raw:true});
+          rows = rows.concat(objsToRows(objs, cleanName(n)));
+        });
+      }
+      if (!rows.length) throw new Error("no rows");
+      applyRows(rows, $("replace").checked);
+      const arts = [...new Set(rows.map(r=>K().grouped ? r.artist : r.album))];
+      msg.textContent = `Loaded ${rows.length} rows from ${f.name}: ${arts.slice(0,8).join(", ")}${arts.length>8?", …":""}.`;
+      refreshAll();
+    }catch(err){
+      msg.textContent = "Couldn't read that file. " + K().cols.replace(/^Columns needed/, "It needs columns named").replace(/ Each .*$/, "");
+    }
+    e.target.value = "";
+  };
+  isCsv ? rd.readAsText(f) : rd.readAsArrayBuffer(f);
+});
+
+/* ---------------- artists / years / albums ---------------- */
+function fillSelectors(){
+  ensureSel();
+  $("artist").innerHTML = Object.keys(state.artists).map(n=>`<option ${n===ui.artist?"selected":""}>${esc(n)}</option>`).join("");
+  $("artistName").value = ui.artist;
+  const years = Object.keys(getArt().years).map(Number).sort((a,b)=>a-b);
+  $("year").innerHTML = years.map(y=>`<option ${y===ui.year?"selected":""}>${y}</option>`).join("");
+}
+$("artist").addEventListener("change", ()=>{ ui.artist=$("artist").value; ui.year=null; titleDirty=false; refreshAll(); });
+$("year").addEventListener("change", ()=>{ ui.year=Number($("year").value); refreshAll(); });
+$("artistName").addEventListener("change", ()=>{
+  const nn=$("artistName").value.trim();
+  if (!nn || (nn!==ui.artist && state.artists[nn])){ $("artistName").value=ui.artist; return; }
+  const next={}; Object.keys(state.artists).forEach(k=>{ next[k===ui.artist?nn:k]=state.artists[k]; });
+  state.artists=next; ui.artist=nn; refreshAll();
+});
+$("addArtist").addEventListener("click", ()=>{
+  let n="New Artist", i=2; while(state.artists[n]) n="New Artist "+(i++);
+  state.artists[n]={order:[],years:{}}; ui.artist=n; ui.year=null; titleDirty=false; refreshAll();
+});
+$("delArtist").addEventListener("click", ()=>{
+  delete state.artists[ui.artist]; ui.artist=null; ui.year=null; refreshAll();
+});
+$("addYear").addEventListener("click", ()=>{
+  const y=Number($("newYear").value);
+  if (!(y>=1990 && y<=2100)) { $("dataMsg").textContent="Enter a year like 2025."; return; }
+  getArt().years[y] ||= {}; ui.year=y; $("newYear").value=""; $("dataMsg").textContent=""; refreshAll();
+});
+$("addAlbum").addEventListener("click", addAlbum);
+$("newAlbum").addEventListener("keydown", e=>{ if(e.key==="Enter") addAlbum(); });
+function addAlbum(){
+  const n=$("newAlbum").value.trim(); if(!n) return;
+  const art=getArt();
+  if (art.order.includes(n)){ $("dataMsg").textContent="That "+K().one+" is already listed."; return; }
+  art.order.push(n); getArr(n); $("newAlbum").value=""; $("dataMsg").textContent=""; refreshAll();
+}
+$("spBtn").addEventListener("click", ()=>{
+  SpotifyImport.open({ mode:"table", kind, onImport:(res, msg)=>{
+    if ($("replace").checked) state.artists = res; else Object.assign(state.artists, res);
+    ui.artist = Object.keys(res)[0]; ui.year = null; titleDirty = false; lastDaysKey = "";
+    $("loadMsg").textContent = msg; refreshAll();
+  }});
+});
+$("clearAll").addEventListener("click", ()=>{
+  state.artists = {}; ui.artist = null; ui.year = null; titleDirty=false; lastDaysKey="";
+  $("dataMsg").textContent="Cleared."; refreshAll();
+});
+
+/* ---------------- grid editor ---------------- */
+function renderGrid(){
+  const art=getArt(), yr=getYear();
+  if (!art.order.length){ $("grid").innerHTML='<div class="msg" style="padding:12px">No '+K().many+' yet. Add one below or upload a sheet.</div>'; return; }
+  let h='<table class="grid"><thead><tr><th class="sticky">'+K().One+'</th><th class="prevh">Dec '+(ui.year-1)+'</th>'+MONTHS.map(m=>`<th>${m}</th>`).join("")+'</tr></thead><tbody>';
+  art.order.forEach((name,i)=>{
+    const arr=yr[name]||emptyArr();
+    h+=`<tr><td class="sticky"><input class="aname" data-i="${i}" value="${esc(name)}">
+      <div class="ctl"><button class="alt small" data-act="up" data-i="${i}">▲</button><button class="alt small" data-act="down" data-i="${i}">▼</button><button class="danger small" data-act="del" data-i="${i}">Remove</button></div></td>`;
+    const pa=(art.years[ui.year-1]||{})[name], pv=pa?pa[11]:null;
+    h+=`<td><input class="cell prev" inputmode="decimal" data-i="${i}" data-m="-1" value="${pv==null?"":pv}"></td>`;
+    for(let m=0;m<12;m++) h+=`<td><input class="cell" inputmode="decimal" data-i="${i}" data-m="${m}" value="${arr[m]==null?"":arr[m]}"></td>`;
+    h+="</tr>";
+  });
+  $("grid").innerHTML=h+"</tbody></table>";
+}
+function setCell(i,m,v){
+  const art=getArt(), name=art.order[i];
+  if (m===-1){
+    if (v==null && !art.years[ui.year-1]) return;
+    const yr=(art.years[ui.year-1] ||= {});
+    (yr[name] ||= emptyArr())[11]=v;
+  } else getArr(name)[m]=v;
+}
+const gridEl=$("grid");
+gridEl.addEventListener("input", e=>{
+  const t=e.target; if(!t.classList.contains("cell")) return;
+  setCell(+t.dataset.i,+t.dataset.m,parseNum(t.value));
+  fillSelectors(); persist(); renderChart();
+});
+gridEl.addEventListener("change", e=>{
+  const t=e.target; if(!t.classList.contains("aname")) return;
+  const art=getArt(), i=+t.dataset.i, old=art.order[i], nn=t.value.trim();
+  if(!nn || (nn!==old && art.order.includes(nn))){ t.value=old; return; }
+  art.order[i]=nn;
+  Object.values(art.years).forEach(yr=>{ if(yr[old]){ yr[nn]=yr[old]; if(nn!==old) delete yr[old]; } });
+  refreshAll();
+});
+gridEl.addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  const art=getArt(), i=+b.dataset.i, act=b.dataset.act;
+  if (act==="up" && i>0) [art.order[i-1],art.order[i]]=[art.order[i],art.order[i-1]];
+  else if (act==="down" && i<art.order.length-1) [art.order[i+1],art.order[i]]=[art.order[i],art.order[i+1]];
+  else if (act==="del"){ const n=art.order[i]; art.order.splice(i,1); Object.values(art.years).forEach(yr=>delete yr[n]); }
+  refreshAll();
+});
+gridEl.addEventListener("paste", e=>{
+  const t=e.target; if(!t.classList.contains("cell")) return;
+  const text=(e.clipboardData||window.clipboardData).getData("text").replace(/\r/g,"").replace(/\n+$/,"");
+  if(!/[\t\n]/.test(text)) return;
+  e.preventDefault();
+  const art=getArt(), i0=+t.dataset.i, m0=+t.dataset.m;
+  text.split("\n").forEach((line,r)=>{
+    const name=art.order[i0+r]; if(!name) return;
+    line.split("\t").forEach((v,c)=>{ const m=m0+c; if(m<=11) setCell(i0+r,m,parseNum(v)); });
+  });
+  fillSelectors(); persist(); renderGrid(); renderChart();
+});
+
+/* ---------------- export ---------------- */
+function longRows(){
+  const grouped=K().grouped, rows=[grouped?["Artist","Month",K().One,"Streams"]:["Month","Artist","Streams"]];
+  Object.keys(state.artists).forEach(a=>{
+    const art=state.artists[a];
+    Object.keys(art.years).map(Number).sort((x,y)=>x-y).forEach(y=>{
+      for(let m=0;m<12;m++) art.order.forEach(al=>{
+        const v=art.years[y][al]?.[m];
+        if (v==null) return;
+        const mo=`${y}-${String(m+1).padStart(2,"0")}-01`;
+        rows.push(grouped ? [a,mo,al,v] : [mo,al,v]);
+      });
+    });
+  });
+  return rows;
+}
+const toCSV = rows => rows.map(r=>r.map(c=>{ const s=String(c); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(",")).join("\n");
+function saveBlob(blob, name){
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+$("expCsv").addEventListener("click", ()=>{
+  saveBlob(new Blob([toCSV(longRows())],{type:"text/csv"}),kind+"-streams-data.csv");
+  $("dataMsg").textContent="If nothing downloaded, use 'Copy as CSV' instead.";
+});
+$("expXlsx").addEventListener("click", ()=>{
+  if (typeof XLSX==="undefined"){ $("dataMsg").textContent="Spreadsheet export needs an internet connection. Use .csv instead."; return; }
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(longRows()), "Streams");
+  const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  saveBlob(new Blob([out],{type:"application/octet-stream"}),kind+"-streams-data.xlsx");
+  $("dataMsg").textContent="If nothing downloaded, use 'Copy as CSV' instead.";
+});
+$("copyCsv").addEventListener("click", async ()=>{
+  const txt=toCSV(longRows());
+  try{ await navigator.clipboard.writeText(txt); $("dataMsg").textContent="Copied. Paste into a spreadsheet or a .csv file."; }
+  catch(e){
+    const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); $("dataMsg").textContent="Copied. Paste into a spreadsheet or a .csv file."; }catch(_){ $("dataMsg").textContent="Couldn't copy here."; }
+    ta.remove();
+  }
+});
+$("tpl").addEventListener("click", ()=>{
+  const t = {
+    albums:"Artist,Month,Album,Streams\nMy Artist,2026-01-01,First Album,310\nMy Artist,2026-01-01,Second Album,150\nMy Artist,2026-02-01,First Album,280\nMy Artist,2026-02-01,Second Album,190\n",
+    songs:"Artist,Month,Song,Streams\nMy Artist,2026-01-01,First Song,310\nMy Artist,2026-01-01,Second Song,150\nMy Artist,2026-02-01,First Song,280\nMy Artist,2026-02-01,Second Song,190\n",
+    artists:"Month,Artist,Streams\n2026-01-01,Artist One,9200\n2026-01-01,Artist Two,5100\n2026-02-01,Artist One,9800\n2026-02-01,Artist Two,4700\n"
+  }[kind];
+  saveBlob(new Blob([t],{type:"text/csv"}),kind+"-streams-template.csv");
+});
+
+/* ---------------- chart ---------------- */
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+const has = (o, k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(o, k);
+const THEMES = {
+  cream:    { name:"Cream",    BG:"#F8F1E4", INK:"#4A3F3B", MUTED:"#8F8076" },
+  blush:    { name:"Blush",    BG:"#FBEDEA", INK:"#5A3E45", MUTED:"#94777C" },
+  sage:     { name:"Sage",     BG:"#EDF1E6", INK:"#38483B", MUTED:"#73836F" },
+  mist:     { name:"Mist",     BG:"#EAF0F6", INK:"#34455A", MUTED:"#71829A" },
+  midnight: { name:"Midnight", BG:"#1F2640", INK:"#F2EEF8", MUTED:"#A3A9C7" },
+  custom:   { name:"Custom" }
+};
+const FONTS = {
+  serif: { name:"Serif", stack:'"Palatino Linotype",Palatino,"Book Antiqua","Iowan Old Style","Times New Roman",serif' },
+  sans:  { name:"Sans",  stack:'"Avenir Next","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif' }
+};
+let style = { themeId:"cream", font:"serif", custom:null };
+const rgbOf = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+const rgba = (h,a) => { const [r,g,b] = rgbOf(h); return `rgba(${r},${g},${b},${a})`; };
+const mixHex = (a,b,t) => { const x = rgbOf(a), y = rgbOf(b); return "#" + x.map((v,i)=>Math.round(v+(y[i]-v)*t).toString(16).padStart(2,"0")).join(""); };
+const lum = h => { const [r,g,b] = rgbOf(h).map(v => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*r+0.7152*g+0.0722*b; };
+function theme(){
+  let t = THEMES[has(THEMES, style.themeId) ? style.themeId : "cream"];
+  if (style.themeId === "custom"){
+    const c = style.custom || {}, bg = HEX6.test(c.bg) ? c.bg : THEMES.cream.BG, ink = HEX6.test(c.ink) ? c.ink : THEMES.cream.INK;
+    t = { BG:bg, INK:ink, MUTED:mixHex(ink,bg,0.4) };
+  }
+  const dark = lum(t.BG) < 0.25;
+  return Object.assign({ dark,
+    POS: dark ? "#5FBF98" : "#4F9F7E", NEG: dark ? "#E58A85" : "#D9807B",
+    POSTXT: dark ? "#BFEBD3" : "#1F5A40", NEGTXT: dark ? "#FFC4BF" : "#8E2F2B" }, t);
+}
+function fmtPct(p){ const a=Math.abs(p), s=a>=1000?(a/1000).toFixed(1)+"k":Math.round(a).toString(); return (p>=0?"+":"−")+s+"%"; }
+function fmtVal(v,dec){
+  if (v>=1e6) return (v/1e6).toFixed(1)+"M";
+  if (v>=1e5) return Math.round(v/1e3)+"k";
+  if (v>=100 || dec===0) return Math.round(v).toLocaleString("en-US");
+  return v.toFixed(dec);
+}
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function sizeCanvas(W,H,th){
+  canvas.width=W*S; canvas.height=H*S; ctx.setTransform(S,0,0,S,0,0);
+  ctx.fillStyle=th.BG; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba(th.INK,0.18); ctx.lineWidth=1.5; rr(16,16,W-32,H-32,24); ctx.stroke();
+}
+function showImg(W){ const img=$("img"); img.src=canvas.toDataURL("image/png"); img.style.width=W+"px"; }
+
+function renderChart(){
+  const th=theme(), F=FONTS[has(FONTS, style.font) ? style.font : "serif"].stack;
+  const art=getArt(), y=ui.year, yr=art.years[y]||{};
+  const metric=$("metric").value, isAvg=metric==="avg", showPct=$("showPct").checked;
+
+  let maxMonth=0;
+  art.order.forEach(n=>{ (yr[n]||[]).forEach((v,i)=>{ if(v!=null && i+1>maxMonth) maxMonth=i+1; }); });
+
+  const auto = K().grouped ? `${ui.artist}: ${isAvg?"Average Streams per Day":"Streams per Month"}, ${y}` : `${isAvg?"Average Streams per Day":"Streams per Month"} by Artist, ${y}`;
+  if (!titleDirty) $("title").value = auto;
+
+  if (!art.order.length || !maxMonth){
+    sizeCanvas(720,170,th); ctx.fillStyle=th.MUTED; ctx.font=`italic 19px ${F}`; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    ctx.fillText("No data yet. Upload a sheet or add "+K().many+" and streams above.", 48, 92);
+    showImg(720); return;
+  }
+
+  const key=`${ui.artist}|${y}|${maxMonth}`;
+  if (key!==lastDaysKey){
+    const now=new Date();
+    $("lastDays").value = (now.getFullYear()===y && now.getMonth()+1===maxMonth) ? now.getDate() : daysIn(y,maxMonth);
+    lastDaysKey=key;
+  }
+
+  const nMonths=Math.max(1, $("showLast").checked ? maxMonth : maxMonth-1);
+  const days=[]; for(let m=1;m<=12;m++) days.push(daysIn(y,m));
+  const lastDays=Math.min(31,Math.max(1,+$("lastDays").value||days[maxMonth-1]));
+  if (nMonths===maxMonth) days[maxMonth-1]=Math.min(lastDays, days[maxMonth-1]);
+  const partial = nMonths===maxMonth && days[maxMonth-1] < daysIn(y,maxMonth);
+  const totalDays=days.slice(0,nMonths).reduce((a,b)=>a+b,0);
+
+  let rows=art.order.map(name=>{
+    const raw=(yr[name]||emptyArr()).slice(0,nMonths).map(v=>v||0);
+    const total=raw.reduce((a,b)=>a+b,0);
+    const pd=((art.years[y-1]||{})[name]||[])[11];
+    const prevDec = pd==null ? null : (isAvg ? pd/31 : pd);
+    return { name, vals: isAvg ? raw.map((v,i)=>v/days[i]) : raw, total, prevDec, yearVal: isAvg ? total/totalDays : total };
+  });
+  const sort=$("sort").value;
+  if (sort==="total") rows.sort((a,b)=>b.total-a.total);
+  else if (sort==="az") rows.sort((a,b)=>a.name.localeCompare(b.name));
+
+  // layout
+  const mctx=document.createElement("canvas").getContext("2d"); mctx.font=`700 18px ${F}`;
+  const widest=Math.max(...rows.map(r=>mctx.measureText(r.name).width), 50);
+  const labelW=Math.min(300,Math.max(130,Math.ceil(widest)+34)), colW=92, avgW=108, rowH=showPct?58:44;
+  const padX=52, headTop=40, titleH=96, colHeadH=44, footH=60;
+  const W=Math.max(720, padX*2+labelW+colW*nMonths+avgW);
+  const H=headTop+titleH+colHeadH+rowH*rows.length+footH;
+  sizeCanvas(W,H,th);
+
+  ctx.textBaseline="alphabetic"; ctx.textAlign="left";
+  let tsize=36; ctx.font=`700 ${tsize}px ${F}`;
+  const title=$("title").value;
+  while (tsize>22 && ctx.measureText(title).width>W-padX*2){ tsize-=2; ctx.font=`700 ${tsize}px ${F}`; }
+  ctx.fillStyle=th.INK; ctx.fillText(title, padX, headTop+34);
+  ctx.font=`italic 20px ${F}`; ctx.fillStyle=th.MUTED;
+  const subtitle=(isAvg?"Daily average per month":"Total streams per month")+(showPct?", with % change from the month before":"");
+  ctx.fillText(subtitle, padX, headTop+68);
+  if (showPct){
+    ctx.font=`italic 17px ${F}`; ctx.textBaseline="middle";
+    const w2=ctx.measureText("decrease").width, w1=ctx.measureText("increase").width, ly=headTop+62;
+    let x=W-padX-(w2+22); ctx.fillStyle=th.NEG; ctx.beginPath(); ctx.arc(x+6,ly,6,0,Math.PI*2); ctx.fill(); ctx.fillStyle=th.MUTED; ctx.fillText("decrease",x+20,ly+1);
+    x-=w1+22+22; ctx.fillStyle=th.POS; ctx.beginPath(); ctx.arc(x+6,ly,6,0,Math.PI*2); ctx.fill(); ctx.fillStyle=th.MUTED; ctx.fillText("increase",x+20,ly+1);
+    ctx.textBaseline="alphabetic";
+  }
+
+  const y0=headTop+titleH, tableW=labelW+colW*nMonths+avgW;
+  ctx.fillStyle=th.INK; ctx.font=`700 16px ${F}`; ctx.textAlign="center";
+  for(let m=0;m<nMonths;m++) ctx.fillText(MONTHS[m]+(partial&&m===nMonths-1?"*":""), padX+labelW+colW*m+colW/2, y0+26);
+  ctx.fillText(isAvg?"Year avg":"Year total", padX+labelW+colW*nMonths+avgW/2, y0+26);
+  ctx.textAlign="left"; ctx.fillText(K().One, padX, y0+26);
+  ctx.fillStyle=rgba(th.INK,0.4); ctx.fillRect(padX, y0+colHeadH-4, tableW, 1.5);
+
+  rows.forEach((r,i)=>{
+    const yy=y0+colHeadH+i*rowH;
+    ctx.fillStyle=rgba(th.INK,0.13); ctx.fillRect(padX,yy+rowH-0.75,tableW,1.5);
+    ctx.fillStyle=th.INK; ctx.font=`700 18px ${F}`; ctx.textAlign="left"; ctx.textBaseline="middle";
+    let nm=r.name; if (ctx.measureText(nm).width>labelW-14){ while (nm.length>1 && ctx.measureText(nm+"…").width>labelW-14) nm=nm.slice(0,-1).trimEnd(); nm+="…"; }
+    ctx.fillText(nm,padX,yy+rowH/2);
+    for(let m=0;m<nMonths;m++){
+      const cx=padX+labelW+colW*m, cur=r.vals[m];
+      let txt=null, kind=null, mag=0;
+      const prev = m>0 ? r.vals[m-1] : r.prevDec;
+      if (m>0 || prev!=null){
+        if (prev>0){
+          const p=(cur-prev)/prev*100;
+          if (Math.abs(p)<0.5) txt="0%";
+          else { txt=fmtPct(p); kind=p>0?"pos":"neg"; mag=Math.min(Math.abs(p)/150,1); }
+        } else if (cur>0){ txt="new"; kind="pos"; mag=0.6; }
+        else txt="—";
+      }
+      if (kind){ ctx.fillStyle=rgba(kind==="pos"?th.POS:th.NEG, 0.16+mag*0.42); rr(cx+4,yy+5,colW-8,rowH-10,10); ctx.fill(); }
+      ctx.textAlign="center"; const mid=cx+colW/2;
+      ctx.fillStyle=th.INK; ctx.font=`600 18px ${F}`;
+      ctx.fillText(fmtVal(cur,isAvg?1:0), mid, showPct?yy+rowH/2-9:yy+rowH/2);
+      if (showPct && txt){
+        ctx.font=`italic 600 14px ${F}`;
+        ctx.fillStyle=!kind?th.MUTED:(kind==="pos"?th.POSTXT:th.NEGTXT);
+        ctx.fillText(txt, mid, yy+rowH/2+13);
+      }
+    }
+    const ax=padX+labelW+colW*nMonths;
+    ctx.fillStyle=rgba(th.INK,0.07); rr(ax+4,yy+5,avgW-8,rowH-10,10); ctx.fill();
+    ctx.fillStyle=th.INK; ctx.textAlign="center"; ctx.font=`700 19px ${F}`;
+    ctx.fillText(fmtVal(r.yearVal,isAvg?2:0), ax+avgW/2, yy+rowH/2);
+  });
+
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic"; ctx.fillStyle=th.MUTED; ctx.font=`italic 16px ${F}`;
+  const hasPrev = rows.some(r=>r.prevDec!=null);
+  const note = (hasPrev?`Jan change is vs. Dec ${y-1}. `:"") + (partial?`*${MONTHS[nMonths-1]} is partial (${days[nMonths-1]} days). `:"") +
+    (isAvg ? "% change compares daily averages, so month length doesn't skew it." : "% change compares monthly totals.");
+  let nt=note; while (nt.length>8 && ctx.measureText(nt).width>W-padX*2) nt=nt.slice(0,-2);
+  ctx.fillText(nt===note?note:nt.trimEnd()+"…", padX, H-34);
+  showImg(W);
+}
+
+/* ---------------- style chips ---------------- */
+const chipRefs = { theme:[], font:[] };
+const STRIPES = "repeating-linear-gradient(45deg,#E3DACB 0 5px,#F3ECDD 5px 10px)";
+function buildChips(){
+  [["theme","#themeChips",THEMES],["font","#fontChips",FONTS]].forEach(([key,sel,options])=>{
+    const box=document.querySelector(sel); box.textContent="";
+    Object.keys(options).forEach(id=>{
+      const o=options[id], chip=document.createElement("button"); chip.type="button"; chip.className="chip";
+      const sw=document.createElement("span"); sw.className="sw-theme"; sw.textContent="Aa";
+      if (key==="font"){ sw.style.fontFamily=o.stack; sw.style.background="#FFFDF8"; sw.style.color="#4A3F3B"; }
+      const label=document.createElement("span"); label.textContent=o.name; chip.append(sw,label);
+      chip.addEventListener("click",()=>{
+        if (key==="theme"){
+          if (id==="custom" && style.themeId!=="custom" && !style.custom){ const t=theme(); style.custom={bg:t.BG, ink:t.INK}; }
+          style.themeId=id;
+        } else style.font=id;
+        persist(); paintChips(); renderChart();
+      });
+      box.appendChild(chip); chipRefs[key].push({id,chip,sw});
+    });
+  });
+}
+function paintChips(){
+  chipRefs.theme.forEach(({id,chip,sw})=>{
+    let bg=null, ink=null;
+    if (id==="custom"){ if (style.custom){ bg=style.custom.bg; ink=style.custom.ink; } } else { bg=THEMES[id].BG; ink=THEMES[id].INK; }
+    sw.style.background=bg||STRIPES; sw.style.color=ink||"#85766D";
+    chip.setAttribute("aria-pressed", String(style.themeId===id));
+  });
+  chipRefs.font.forEach(({id,chip})=>chip.setAttribute("aria-pressed", String(style.font===id)));
+  $("customTheme").hidden = style.themeId!=="custom";
+  if (style.themeId==="custom"){ const t=theme(); $("cBg").value=t.BG; $("cInk").value=t.INK; }
+}
+["cBg","cInk"].forEach(id=>$(id).addEventListener("input",()=>{ style.custom={bg:$("cBg").value, ink:$("cInk").value}; persist(); paintChips(); renderChart(); }));
+
+/* ---------------- save PNG ---------------- */
+const fileBase = () => K().grouped ? `${slug(ui.artist)}-${slug(K().many)}-${ui.year}` : `artists-${ui.year}`;
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "streams";
+$("dl").addEventListener("click", ()=>{
+  canvas.toBlob(b=>saveBlob(b, `${fileBase()}-streams.png`), "image/png");
+});
+if (navigator.share) $("share").style.display="";
+$("share").addEventListener("click", ()=>{
+  canvas.toBlob(b=>{
+    const f=new File([b], `${fileBase()}-streams.png`, {type:"image/png"});
+    if (navigator.canShare && navigator.canShare({files:[f]})) navigator.share({files:[f]}).catch(()=>{});
+    else $("dlMsg").textContent="Sharing isn't supported here. Press and hold the image to save it.";
+  });
+});
+
+/* ---------------- wiring ---------------- */
+const kindRefs = [];
+function applyKindText(){
+  const k = K();
+  $("newAlbum").placeholder = "New " + k.one + " name";
+  $("addAlbum").textContent = "+ Add " + k.one;
+  $("artistRow").style.display = k.grouped ? "" : "none";
+  $("img").alt = k.label + " streams table";
+  kindRefs.forEach(({id,chip}) => chip.setAttribute("aria-pressed", String(id===kind)));
+}
+function buildKindChips(){
+  KIND_IDS.forEach(id => {
+    const chip = document.createElement("button"); chip.type = "button"; chip.className = "chip kindchip"; chip.textContent = KINDS[id].label;
+    chip.addEventListener("click", () => { if (id!==kind) setKind(id); });
+    $("kindChips").appendChild(chip); kindRefs.push({id,chip});
+  });
+}
+function setKind(k){
+  kind = k; state = data[k]; ui = uis[k]; titleDirty = false; lastDaysKey = "";
+  $("dataMsg").textContent = ""; $("newAlbum").value = ""; $("loadMsg").textContent = KINDS[k].cols;
+  try{ const u = new URL(location.href); u.searchParams.set("kind", k); history.replaceState(null, "", u); }catch(e){}
+  refreshAll();
+}
+function refreshAll(){ applyKindText(); fillSelectors(); renderGrid(); persist(); renderChart(); }
+$("title").addEventListener("input", ()=>{ titleDirty=true; renderChart(); });
+$("autoTitle").addEventListener("click", ()=>{ titleDirty=false; renderChart(); });
+["metric","showPct","showLast","lastDays","sort"].forEach(id=>{
+  $(id).addEventListener("input", ()=>{ if(id==="metric" && !titleDirty){} renderChart(); });
+  $(id).addEventListener("change", renderChart);
+});
+
+buildChips();
+buildKindChips();
+loadSaved();
+$("loadMsg").textContent = K().cols;
+paintChips();
+refreshAll();
+</script>
+<script>
+(function(){var b=document.getElementById('themeBtn');if(!b)return;
+function cur(){return document.documentElement.dataset.theme==='dark'?'dark':'light'}
+function sync(){var d=cur()==='dark';b.setAttribute('aria-pressed',String(d));b.title=d?'Switch to light theme':'Switch to dark theme';b.setAttribute('aria-label',b.title)}
+b.addEventListener('click',function(){var n=cur()==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('musicTools.theme',n)}catch(e){}sync()});
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(e){if(!localStorage.getItem('musicTools.theme')){document.documentElement.dataset.theme=e.matches?'dark':'light';sync()}})}catch(e){}
+sync()})();
+</script>
+<script src="../spotify.js"></script>
+<script src="../tools.js"></script>
+</body>
+</html>

@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Album rating card</title>
+<script>try{var t=localStorage.getItem('musicTools.theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+  :root {
+    --ink: #4A3F3B;
+    --ink-soft: #85766D;
+    --page: #EFE7D8;
+    --panel: #FBF8F1;
+    --field: #FFFDF8;
+    --line: #DDD2BF;
+    --focus: #8B6FA8;
+    --serif: "Palatino Linotype", Palatino, "Book Antiqua", "Iowan Old Style", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.45;
+  }
+  body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+  .app {
+    display: grid;
+    grid-template-columns: 168px minmax(340px, 460px) minmax(0, 1fr);
+    gap: 32px;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px 24px 56px;
+    align-items: start;
+  }
+  h1 { font-size: 32px; line-height: 1.15; margin: 0 0 6px; }
+  .lede { margin: 0 0 24px; color: var(--ink-soft); font-style: italic; }
+  .homelink { display: inline-block; margin: 0 0 12px; color: var(--ink-soft); text-decoration: none; font-size: 15px; border-radius: 6px; }
+  .homelink:hover { color: var(--ink); text-decoration: underline; }
+  .homelink:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .panel { background: var(--panel); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+  .panel h2 { font-size: 19px; margin: 0 0 14px; }
+  .note { margin: -6px 0 14px; font-size: 15px; color: var(--ink-soft); font-style: italic; }
+  label.field { display: block; margin-bottom: 12px; font-size: 15px; color: var(--ink-soft); }
+  label.field span { display: block; margin-bottom: 4px; }
+  input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    font: inherit;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 1px;
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 110px; gap: 12px; }
+  .cover-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    font: inherit; font-weight: 700;
+    border-radius: 10px; padding: 10px 16px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--field); color: var(--ink);
+  }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); padding: 13px 22px; font-size: 17px; }
+  .btn.primary:hover { background: var(--btn-hover); }
+  .coverName { font-size: 15px; color: var(--ink-soft); font-style: italic; }
+
+  ol.songs { list-style: none; margin: 0 0 12px; padding: 0; }
+  .song {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 118px 32px;
+    grid-template-areas: "h t r x";
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 2px 0;
+  }
+  .song .h { grid-area: h; } .song .t { grid-area: t; } .song .rate { grid-area: r; } .song .x { grid-area: x; }
+  .song.dragging { background: var(--field); box-shadow: 0 6px 18px var(--shadow); border-radius: 12px; position: relative; z-index: 2; }
+  .h {
+    width: 28px; height: 36px; padding: 0; border: 0; border-radius: 8px;
+    background: transparent; color: var(--ink-soft); cursor: grab; touch-action: none;
+    display: grid; place-items: center;
+  }
+  .h:hover { background: var(--soft); color: var(--ink); }
+  .rate { display: flex; align-items: center; gap: 8px; }
+  .rate input { padding: 10px 8px; text-align: center; }
+  .sw { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--line); }
+  .x {
+    font: inherit; font-size: 22px; line-height: 1;
+    width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink-soft);
+    border-radius: 8px; cursor: pointer;
+  }
+  .x:hover { background: var(--soft); color: var(--ink); }
+  .listactions { display: flex; gap: 10px; flex-wrap: wrap; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; font-weight: 700; font-size: 15px; }
+  details p { font-size: 15px; color: var(--ink-soft); margin: 8px 0; }
+  details .btn { margin-top: 8px; }
+  .avg { font-size: 15px; color: var(--ink-soft); margin: -4px 0 0; font-style: italic; }
+
+  .preview { position: sticky; top: 24px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; gap: 14px; }
+  .stage { overflow: auto; border-radius: 16px; box-shadow: 0 10px 30px var(--shadow); }
+  canvas { display: block; width: 100%; height: auto; }
+  .actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .hint { margin: 0; font-size: 15px; color: var(--ink-soft); font-style: italic; }
+
+  .style-group { margin-bottom: 16px; }
+  .style-group:last-child { margin-bottom: 0; }
+  .style-group h3 { font-size: 15px; margin: 0 0 8px; color: var(--ink-soft); font-weight: 400; font-style: italic; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px 6px 6px; border-radius: 12px;
+    border: 1.5px solid var(--line); background: var(--field); color: var(--ink);
+    font: inherit; font-size: 15px; cursor: pointer;
+  }
+  .chip:hover { background: var(--soft); }
+  .chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); font-weight: 700; }
+  .chip .sw-theme {
+    width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(74, 63, 59, .25);
+    display: grid; place-items: center; font-size: 16px; font-weight: 700;
+  }
+  .chip .sw-strip { width: 60px; height: 18px; border-radius: 9px; border: 1px solid rgba(74, 63, 59, .25); }
+  .chip .sw-strip { background-repeat: no-repeat; background-clip: padding-box; }
+
+  .check { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; font-size: 16px; cursor: pointer; }
+  .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+  .chip .ratio { display: block; border: 2px solid currentColor; border-radius: 3px; }
+  .savestate { margin: -14px 0 20px; font-size: 14px; color: var(--ink-soft); font-style: italic; min-height: 1.4em; }
+
+  .custom-row { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
+  .custom-row[hidden] { display: none; }
+  .custom-row label { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-soft); }
+  input[type="color"] {
+    width: 44px; height: 36px; padding: 2px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--field);
+  }
+  .chip:disabled { opacity: .5; cursor: not-allowed; }
+  .stylenote { margin: 8px 0 0; font-size: 14px; color: var(--ink-soft); font-style: italic; min-height: 1.3em; }
+  .stylenote:empty { display: none; }
+
+  .toc { position: sticky; top: 32px; align-self: start; }
+  .toc h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px 12px; font-weight: 400; }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .toc a {
+    display: block; padding: 7px 12px; border-radius: 10px; border-left: 3px solid transparent;
+    color: var(--ink-soft); text-decoration: none; font-size: 16px;
+  }
+  .toc a:hover { background: var(--toc-hover); color: var(--ink); }
+  .toc a[aria-current="true"] { background: var(--panel); color: var(--ink); font-weight: 700; border-left-color: var(--ink); }
+  .toc a:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+  [data-section] { scroll-margin-top: 24px; }
+  [data-section]:focus { outline: none; }
+
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: minmax(340px, 460px) minmax(0, 1fr); }
+    .toc {
+      grid-column: 1 / -1; top: 0; z-index: 5;
+      margin: -32px -24px 0; padding: 10px 24px; background: var(--page);
+      border-bottom: 1px solid var(--line);
+    }
+    .toc h2 { display: none; }
+    .toc ul { flex-direction: row; overflow-x: auto; gap: 6px; scrollbar-width: thin; }
+    .toc a { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; border-radius: 10px 10px 0 0; padding: 6px 12px; font-size: 15px; }
+    .toc a[aria-current="true"] { border-bottom-color: var(--ink); }
+    [data-section] { scroll-margin-top: 72px; }
+  }
+  @media (max-width: 880px) {
+    .app { grid-template-columns: minmax(0, 1fr); padding: 20px 16px 48px; }
+    .preview { position: static; max-height: none; }
+    .toc { margin: -20px -16px 0; padding: 10px 16px; }
+  }
+  @media (max-width: 440px) {
+    .song {
+      grid-template-columns: 28px minmax(0, 1fr) 32px;
+      grid-template-areas: "h t x" ". r .";
+      row-gap: 6px;
+      margin-bottom: 14px;
+    }
+    .rate { max-width: 150px; }
+  }
+
+  /* ---------- site-wide light / dark theme ---------- */
+  :root { color-scheme:light; --soft:#F3ECDD; --on-ink:#FBF3E4; --btn-hover:#5E504A; --shadow:rgba(74,63,59,.22); --danger-line:#D7ADA7; --danger-bg:#FBEDEA; --toc-hover:rgba(251,248,241,.8); }
+  :root[data-theme="dark"] {
+    color-scheme:dark;
+    --ink:#EDE3D3; --ink-soft:#A99C8F; --muted:#A99C8F; --page:#171311; --panel:#221D1A; --paper:#221D1A; --field:#2B2521;
+    --line:#3D342E; --soft:#332B26; --focus:#B79BD6; --danger:#F29A90;
+    --on-ink:#1B1613; --btn-hover:#FFF6E6; --shadow:rgba(0,0,0,.55); --danger-line:#6B3E39; --danger-bg:#3A2522; --toc-hover:rgba(34,29,26,.85);
+  }
+  body { position:relative; }
+  .themebtn { position:fixed; bottom:16px; right:16px; z-index:40; box-shadow:0 4px 14px var(--shadow) !important; width:40px; height:40px; padding:0; display:grid; place-items:center; border-radius:50%; border:1px solid var(--line); background:var(--field); color:var(--ink); cursor:pointer; line-height:0; box-shadow:none; font-size:0; }
+  .themebtn:hover { background:var(--soft); }
+  .themebtn svg { width:20px; height:20px; }
+  .themebtn .i-sun { display:none; }
+  :root[data-theme="dark"] .themebtn .i-sun { display:block; }
+  :root[data-theme="dark"] .themebtn .i-moon { display:none; }
+</style>
+</head>
+<body>
+<button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark theme" title="Switch to dark theme"><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+
+<main class="app">
+  <nav class="toc" aria-label="Jump to a section">
+    <h2>Jump to</h2>
+    <ul>
+      <li><a href="#sec-album">Album</a></li>
+      <li><a href="#sec-songs">Songs</a></li>
+      <li><a href="#sec-score">Album score</a></li>
+      <li><a href="#sec-layout">Layout</a></li>
+      <li><a href="#sec-style">Style</a></li>
+      <li><a href="#sec-save">Save and load</a></li>
+      <li><a href="#sec-preview">Preview</a></li>
+    </ul>
+  </nav>
+
+  <section class="editor" aria-label="Editor">
+    <a class="homelink" href="../index.html">← All tools</a>
+    <h1>Album rating card</h1>
+    <p class="lede">Enter the tracklist and your ratings, then download the image.</p>
+    <p class="savestate" id="saveState" role="status" aria-live="polite"></p>
+
+    <div class="panel" id="sec-album" data-section>
+      <h2>Album</h2>
+      <label class="field"><span>Album title</span><input type="text" id="title" autocomplete="off"></label>
+      <div class="row2">
+        <label class="field"><span>Artist</span><input type="text" id="artist" autocomplete="off"></label>
+        <label class="field"><span>Year</span><input type="text" id="year" inputmode="numeric" autocomplete="off"></label>
+      </div>
+      <div class="cover-row">
+        <button type="button" class="btn" id="coverBtn">Add cover art</button>
+        <input type="file" id="coverFile" accept="image/*,.jpg,.jpeg,.png,.webp" style="display:none">
+        <button type="button" class="btn" id="coverClear" hidden>Remove cover</button>
+        <span class="coverName" id="coverName" role="status">Without a cover, a color grid of your ratings is used.</span>
+      </div>
+    </div>
+
+    <div class="panel" id="sec-songs" data-section>
+      <h2>Songs and ratings</h2>
+      <p class="note">Drag the grip to reorder. With the keyboard, focus the grip and press the up or down arrow.</p>
+      <ol class="songs" id="songs"></ol>
+      <div class="listactions">
+        <button type="button" class="btn" id="addSong">Add song</button>
+        <button type="button" class="btn" id="clearAll">Clear all</button>
+      </div>
+      <details>
+        <summary>Paste a tracklist</summary>
+        <p>One song per line. Add a rating after a dash if you like, for example: <em>Song title - 8.5</em></p>
+        <textarea id="paste" aria-label="Tracklist to paste"></textarea>
+        <button type="button" class="btn" id="pasteAdd">Add these songs</button>
+      </details>
+    </div>
+
+    <div class="panel" id="sec-score" data-section>
+      <h2>Album score</h2>
+      <label class="field"><span>Your score for the whole album (1 to 10)</span>
+        <input type="number" id="override" min="1" max="10" step="0.1" inputmode="decimal" placeholder="Leave empty to use the average">
+      </label>
+      <p class="avg" id="avgText"></p>
+    </div>
+
+    <div class="panel" id="sec-layout" data-section>
+      <h2>Layout</h2>
+      <div class="style-group"><h3>Image size</h3><div class="chips" id="sizeChips" role="group" aria-label="Image size"></div></div>
+      <p class="avg" style="margin:-4px 0 12px">Tall always fits every song. The other sizes tighten the rows for long tracklists.</p>
+      <label class="check"><input type="checkbox" id="sortToggle"> Rank songs by rating in the image</label>
+      <label class="check"><input type="checkbox" id="statsToggle"> Show quick stats</label>
+      <p class="avg" id="layoutNote" style="margin-top:10px"></p>
+    </div>
+
+    <div class="panel" id="sec-style" data-section>
+      <h2>Style</h2>
+      <div class="style-group"><h3>Background</h3>
+        <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
+        <div class="custom-row" id="customTheme" hidden>
+          <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
+          <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
+        </div>
+        <p class="stylenote" id="themeNote"></p>
+      </div>
+      <div class="style-group"><h3>Rating colors</h3>
+        <div class="chips" id="paletteChips" role="group" aria-label="Rating colors"></div>
+        <div class="custom-row" id="customPalette" hidden>
+          <label>Low <input type="color" id="cLow" aria-label="Custom color for low ratings"></label>
+          <label>Middle <input type="color" id="cMid" aria-label="Custom color for middle ratings"></label>
+          <label>High <input type="color" id="cHigh" aria-label="Custom color for high ratings"></label>
+        </div>
+        <p class="stylenote" id="paletteNote"></p>
+      </div>
+      <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+    </div>
+
+    <div class="panel" id="sec-save" data-section>
+      <h2>Save and load</h2>
+      <p class="note">Save everything on the page (details, songs, ratings, album score, style and cover) as one small file, and load it later to keep editing. Loading replaces what is on the page now. Your work is also saved automatically in this browser, but export is the way to back it up or move it to another device.</p>
+      <div class="listactions">
+        <button type="button" class="btn" id="exportBtn">Export rating</button>
+        <button type="button" class="btn" id="importBtn">Import rating</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+      </div>
+      <p class="avg" id="fileStatus" role="status" style="margin-top:12px"></p>
+    </div>
+  </section>
+
+  <section class="preview" id="sec-preview" data-section aria-label="Preview">
+    <div class="stage"><canvas id="card" role="img" aria-label="Preview of your album rating card"></canvas></div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="download">Download PNG</button>
+      <p class="hint">If the download is blocked, press and hold (or right-click) the image to save it.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ---------- Settings you may want to edit ---------- */
+// Style options. Add your own entries here and they appear as buttons automatically.
+const THEMES = {
+  cream:    { name: 'Cream',    BG: '#F8F1E4', TRACK: '#EEE3CF', TILE_EMPTY: '#E4D6BE', INK: '#4A3F3B', MUTED: '#8F8076', RULE: '#E2D5BF', EDGE: 'rgba(74,63,59,0.16)' },
+  blush:    { name: 'Blush',    BG: '#FBEDEA', TRACK: '#F3DCD8', TILE_EMPTY: '#EACBC6', INK: '#5A3E45', MUTED: '#94777C', RULE: '#EDD3CF', EDGE: 'rgba(90,62,69,0.16)' },
+  sage:     { name: 'Sage',     BG: '#EDF1E6', TRACK: '#DEE6D3', TILE_EMPTY: '#CFDBC2', INK: '#38483B', MUTED: '#73836F', RULE: '#D3DDC6', EDGE: 'rgba(56,72,59,0.16)' },
+  mist:     { name: 'Mist',     BG: '#EAF0F6', TRACK: '#DCE5EF', TILE_EMPTY: '#CBD8E6', INK: '#34455A', MUTED: '#71829A', RULE: '#D0DBE8', EDGE: 'rgba(52,69,90,0.16)' },
+  midnight: { name: 'Midnight', BG: '#1F2640', TRACK: '#2D3558', TILE_EMPTY: '#3A4470', INK: '#F2EEF8', MUTED: '#A3A9C7', RULE: '#353E66', EDGE: 'rgba(255,255,255,0.18)' }
+};
+// Color for each whole rating, 1 to 10. Half points blend between neighbors.
+const PALETTES = {
+  pastel: { name: 'Pastel', stops: ['#E8A3A0','#EDB1A0','#F1BFA2','#F4D3A4','#F3E3A6','#E1E3A5','#CDE0AA','#B8DAB0','#A5D3B5','#92CBB4'] },
+  vivid:  { name: 'Vivid',  stops: ['#E5484D','#EE6A45','#F58F3C','#F6B93B','#EFD64A','#C5D94A','#8FCB4F','#55BA5C','#2FAE6C','#1B9E7E'] },
+  ocean:  { name: 'Ocean',  stops: ['#C9E3E8','#B5D9E1','#A1CEDB','#8CC3D3','#76B6CA','#60A8BF','#4B99B3','#3A89A6','#2C7898','#1F6789'] }
+};
+const FONTS = {
+  serif: { name: 'Serif', stack: '"Palatino Linotype",Palatino,"Book Antiqua","Iowan Old Style","Times New Roman",serif' },
+  sans:  { name: 'Sans',  stack: '"Avenir Next","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif' }
+};
+
+THEMES.cover = { name: 'From cover' };   // colors picked from the uploaded cover art
+THEMES.custom = { name: 'Custom' };      // colors chosen with the pickers
+PALETTES.cover = { name: 'From cover' };
+PALETTES.custom = { name: 'Custom' };
+const DEFAULT_CUSTOM = { bg: '#F8F1E4', ink: '#4A3F3B', low: '#E8A3A0', mid: '#F3E3A6', high: '#92CBB4' };
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+// Image sizes. H is the image height in px at 1080 wide; null means "as tall as needed".
+const SIZES = {
+  tall:     { name: 'Tall',     H: null, icon: [12, 30], hint: 'Fits every song' },
+  portrait: { name: 'Portrait', H: 1350, icon: [20, 25], hint: '4:5, good for feeds' },
+  square:   { name: 'Square',   H: 1080, icon: [22, 22], hint: '1:1' },
+  story:    { name: 'Story',    H: 1920, icon: [15, 27], hint: '9:16, good for stories' }
+};
+const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+
+/* ---------- Active style (set by applyStyle) ---------- */
+let BG, TRACK, TILE_EMPTY, INK, MUTED, RULE, EDGE, STOPS, FONT;
+const W = 1080, PAD = 72, COVER = 264, GAP1 = 56, SCORE_H = 170, GAP2 = 48, ROW = 68, S = 2;
+const STATS_H = 124, STATS_GAP = 36;
+
+/* ---------- State ---------- */
+let uid = 0;
+const state = {
+  title: 'Typical of Me', artist: 'Laufey', year: '2021',
+  cover: null, override: '',
+  style: { theme: 'cream', palette: 'pastel', font: 'serif' },
+  custom: { ...DEFAULT_CUSTOM },
+  size: 'tall', sortByRating: false, showStats: false,
+  songs: [
+    ['Street by Street', 8.5], ['Magnolia', 8], ['Like the Movies', 9], ['I Wish You Love', 7.5],
+    ['James', 8], ['Someone New', 9.5], ['Best Friend', 7]
+  ].map(([title, rating]) => ({ id: ++uid, title, rating }))
+};
+
+const $ = s => document.querySelector(s);
+const cv = $('#card'), ctx = cv.getContext('2d');
+const listEl = $('#songs');
+
+/* ---------- Helpers ---------- */
+const clamp = v => Math.min(10, Math.max(1, v));
+const round1 = v => Math.round(v * 10) / 10;
+const fmt = v => { v = round1(v); return Number.isInteger(v) ? String(v) : v.toFixed(1); };
+function parseScore(raw) {
+  if (raw === '' || raw == null) return null;
+  const n = parseFloat(String(raw).replace(',', '.'));
+  return Number.isFinite(n) ? clamp(n) : null;
+}
+function hex(c) { return [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)); }
+function colorFor(v) {
+  const t = clamp(v) - 1;
+  if (t >= 9) return 'rgb(' + hex(STOPS[9]).join(',') + ')';
+  const i = Math.floor(t), f = t - i, a = hex(STOPS[i]), b = hex(STOPS[i + 1]);
+  return 'rgb(' + a.map((x, k) => Math.round(x + (b[k] - x) * f)).join(',') + ')';
+}
+// Dark or white text, whichever reads better on the given rgb() color.
+function textOn(rgb) {
+  const [r, g, b] = rgb.match(/\d+/g).map(Number);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#3A3035' : '#FFFFFF';
+}
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function wrap(text, maxW) {
+  const words = text.split(/\s+/), lines = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(test).width <= maxW || !cur) cur = test;
+    else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+function fit(text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  while (text.length > 1 && ctx.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+  return text.trimEnd() + '…';
+}
+
+/* ---------- Drawing ---------- */
+function summary() {
+  const songs = state.songs.filter(s => s.title.trim());
+  const rated = songs.filter(s => s.rating != null);
+  const avg = rated.length ? rated.reduce((a, s) => a + s.rating, 0) / rated.length : null;
+  const ov = parseScore(state.override);
+  const score = ov != null ? ov : (avg != null ? round1(avg) : null);
+  return { songs, rated, avg, score };
+}
+
+// Order of songs in the image: tracklist order, or best to worst (ties keep tracklist order, unrated last).
+function rowsOrder(list) {
+  if (!state.sortByRating) return list;
+  return list.map((s, i) => ({ s, i })).sort((a, b) => {
+    const ra = a.s.rating, rb = b.s.rating;
+    if (ra == null && rb == null) return a.i - b.i;
+    if (ra == null) return 1;
+    if (rb == null) return -1;
+    return (rb - ra) || (a.i - b.i);
+  }).map(x => x.s);
+}
+
+// Works out the image height and how the song rows are spaced for the chosen size.
+function computeLayout(n, statsOn) {
+  const statsBlock = statsOn ? STATS_GAP + STATS_H : 0;
+  const fixed = PAD + COVER + GAP1 + SCORE_H + statsBlock + GAP2 + PAD;
+  const Hc = SIZES[state.size].H;
+  const L = { H: fixed + n * ROW, s: 1, offX: 0, rs: 1, topExtra: 0, gap1Extra: 0, gap2Extra: 0, statsBlock };
+  if (!Hc) return L;
+  L.H = Hc;
+  const rs = n ? (Hc - fixed) / (n * ROW) : 1;
+  if (rs >= 1) {
+    // Room to spare: loosen the rows a little and spread the rest as breathing space.
+    L.rs = n ? Math.min(rs, 1.3) : 1;
+    const extra = Hc - (fixed + n * ROW * L.rs);
+    L.topExtra = extra * 0.3; L.gap1Extra = extra * 0.2; L.gap2Extra = extra * 0.2;
+  } else if (rs >= 0.5) {
+    L.rs = rs;                       // tighten the rows to fit
+  } else {
+    L.rs = 0.5;                      // very long tracklist: tighten, then shrink everything to fit
+    L.s = Hc / (fixed + n * ROW * 0.5);
+    L.offX = (W - W * L.s) / 2;
+  }
+  return L;
+}
+
+// Text for the highest or lowest row: names when one or two songs tie, a count when more do.
+function tieText(list, maxW) {
+  const names = list.map(s => s.title.trim() || 'Untitled');
+  if (list.length >= 3) return `${list.length} songs tied`;
+  if (list.length === 1) return fit(names[0], maxW);
+  const both = names.join(', ');
+  if (ctx.measureText(both).width <= maxW) return both;
+  const suffix = ' +1 more';
+  return fit(names[0], maxW - ctx.measureText(suffix).width) + suffix;
+}
+
+function drawStats(y, rated, avg) {
+  const lx = PAD, tx = PAD + 124, rx = PAD + 520, nameW = rx - tx - 64;
+  const maxR = Math.max(...rated.map(s => s.rating)), minR = Math.min(...rated.map(s => s.rating));
+  const rowLabel = (label, cy) => {
+    ctx.textAlign = 'left'; ctx.font = `italic 400 24px ${FONT}`; ctx.fillStyle = MUTED; ctx.fillText(label, lx, cy);
+  };
+  ctx.textBaseline = 'middle';
+  if (maxR === minR) {
+    // Every rated song has the same rating: one line says so instead of repeating it.
+    const cy = y + 20;
+    rowLabel('Ratings', cy);
+    ctx.textAlign = 'left'; ctx.font = `400 27px ${FONT}`; ctx.fillStyle = INK;
+    ctx.fillText(`All songs rated ${fmt(maxR)}`, tx, cy);
+  } else {
+    [['Highest', maxR, y + 20], ['Lowest', minR, y + 60]].forEach(([label, r, cy]) => {
+      const list = rated.filter(s => s.rating === r);
+      rowLabel(label, cy);
+      ctx.font = `400 27px ${FONT}`; ctx.fillStyle = INK; ctx.textAlign = 'left';
+      ctx.fillText(tieText(list, nameW), tx, cy);
+      ctx.textAlign = 'right'; ctx.font = `700 27px ${FONT}`; ctx.fillText(fmt(r), rx, cy);
+    });
+  }
+  const cy = y + 100;
+  ctx.textAlign = 'left'; ctx.font = `italic 400 24px ${FONT}`; ctx.fillStyle = MUTED; ctx.fillText('Average', lx, cy);
+  ctx.font = `400 27px ${FONT}`; ctx.fillText(`of ${rated.length} rated songs`, tx, cy);
+  ctx.textAlign = 'right'; ctx.font = `700 27px ${FONT}`; ctx.fillStyle = INK; ctx.fillText(fmt(avg), rx, cy);
+
+  /* how the ratings are spread */
+  const counts = Array(10).fill(0);
+  rated.forEach(s => { counts[Math.min(9, Math.max(0, Math.round(s.rating) - 1))]++; });
+  const maxC = Math.max(...counts);
+  const hx = 660, hw = W - PAD - hx, gap = 8, bw = (hw - gap * 9) / 10, baseY = y + 88, maxH = 78;
+  counts.forEach((c, i) => {
+    const x = hx + i * (bw + gap);
+    if (c) {
+      const bh = Math.max(10, (c / maxC) * maxH);
+      ctx.fillStyle = colorFor(i + 1);
+      rr(x, baseY - bh, bw, bh, 5); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = EDGE; ctx.stroke();
+    } else {
+      ctx.fillStyle = TRACK; rr(x, baseY - 4, bw, 4, 2); ctx.fill();
+    }
+  });
+  ctx.textBaseline = 'alphabetic'; ctx.font = `400 21px ${FONT}`; ctx.fillStyle = MUTED;
+  ctx.textAlign = 'left';   ctx.fillText('1', hx, y + 118);
+  ctx.textAlign = 'right';  ctx.fillText('10', hx + hw, y + 118);
+  ctx.textAlign = 'center'; ctx.font = `italic 400 21px ${FONT}`; ctx.fillText('spread of ratings', hx + hw / 2, y + 118);
+}
+
+function draw() {
+  const sm = summary();
+  const { rated, avg, score } = sm;
+  const songs = rowsOrder(sm.songs);
+  const n = songs.length;
+  const statsOn = state.showStats && rated.length >= 2;
+  const L = computeLayout(n, statsOn);
+  const H = L.H;
+  cv.width = W * S; cv.height = H * S;
+  ctx.setTransform(S, 0, 0, S, 0, 0);
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  ctx.translate(L.offX, 0); ctx.scale(L.s, L.s);
+
+  /* cover, or a grid of colors for the ratings */
+  const top = PAD + L.topExtra;
+  ctx.save();
+  rr(PAD, top, COVER, COVER, 12); ctx.clip();
+  ctx.fillStyle = TRACK; ctx.fillRect(PAD, top, COVER, COVER);
+  if (state.cover) {
+    ctx.drawImage(state.cover, PAD, top, COVER, COVER);
+  } else if (n) {
+    const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols), gap = 6, inset = 14;
+    const size = Math.floor((COVER - inset * 2 - gap * (cols - 1)) / cols);
+    const gridW = size * cols + gap * (cols - 1), gridH = size * rows + gap * (rows - 1);
+    const ox = PAD + (COVER - gridW) / 2, oy = top + (COVER - gridH) / 2;
+    songs.forEach((s, i) => {
+      const x = ox + (i % cols) * (size + gap), y = oy + Math.floor(i / cols) * (size + gap);
+      ctx.fillStyle = s.rating != null ? colorFor(s.rating) : TILE_EMPTY;
+      rr(x, y, size, size, 6); ctx.fill();
+    });
+  }
+  ctx.restore();
+  rr(PAD, top, COVER, COVER, 12); ctx.lineWidth = 1.5; ctx.strokeStyle = EDGE; ctx.stroke();
+
+  /* header text */
+  const tx = PAD + COVER + 48, maxW = W - PAD - tx;
+  const title = state.title.trim() || 'Untitled album';
+  const artist = state.artist.trim(), year = state.year.trim();
+  let size = 58, lines = [];
+  for (; size >= 30; size -= 2) {
+    ctx.font = `700 ${size}px ${FONT}`;
+    lines = wrap(title, maxW);
+    if (lines.length * size * 1.14 <= COVER - 100) break;
+  }
+  const lh = size * 1.14, artistH = artist ? 46 : 0, yearH = year ? 46 : 0;
+  const blockH = artistH + lines.length * lh + yearH;
+  const ty = top + (COVER - blockH) / 2;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  if (artist) {
+    ctx.font = `italic 400 31px ${FONT}`; ctx.fillStyle = MUTED;
+    ctx.fillText(fit(artist, maxW), tx, ty + 28);
+  }
+  ctx.font = `700 ${size}px ${FONT}`;
+  ctx.fillStyle = state.title.trim() ? INK : MUTED;
+  lines.forEach((l, i) => ctx.fillText(l, tx, ty + artistH + i * lh + size * 0.88));
+  if (year) {
+    ctx.font = `italic 400 27px ${FONT}`; ctx.fillStyle = MUTED;
+    ctx.fillText(year, tx, ty + artistH + lines.length * lh + 30);
+  }
+
+  /* album score */
+  const y0 = top + COVER + GAP1 + L.gap1Extra, R = SCORE_H / 2;
+  const cx = PAD + R, cy0 = y0 + R;
+  const scoreText = score != null ? (round1(score) >= 10 ? '10' : round1(score).toFixed(1)) : '–';
+  ctx.fillStyle = score != null ? colorFor(score) : TRACK;
+  ctx.beginPath(); ctx.arc(cx, cy0, R, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = EDGE; ctx.stroke();
+  ctx.font = `700 80px ${FONT}`; ctx.fillStyle = score != null ? textOn(colorFor(score)) : INK;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(scoreText, cx, cy0 + 4);
+
+  const bx = PAD + SCORE_H + 48, bw = W - PAD - bx;
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.font = `italic 400 28px ${FONT}`; ctx.fillStyle = MUTED;
+  ctx.fillText('out of 10', bx, y0 + 56);
+
+  const by = y0 + 74, bh = 20;
+  const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+  STOPS.forEach((c, i) => grad.addColorStop(i / 9, c));
+  ctx.fillStyle = grad; rr(bx, by, bw, bh, bh / 2); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = EDGE; ctx.stroke();
+  ctx.font = `400 24px ${FONT}`; ctx.fillStyle = MUTED;
+  ctx.textAlign = 'left';  ctx.fillText('1', bx, y0 + 132);
+  ctx.textAlign = 'right'; ctx.fillText('10', bx + bw, y0 + 132);
+  if (score != null) {
+    const px = bx + ((clamp(score) - 1) / 9) * bw, py = by + bh / 2;
+    ctx.fillStyle = BG; ctx.beginPath(); ctx.arc(px, py, 21, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = textOn(colorFor(score)); ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = colorFor(score); ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /* quick stats */
+  if (statsOn) drawStats(y0 + SCORE_H + STATS_GAP, rated, avg);
+
+  /* song rows */
+  const gap2 = GAP2 + L.gap2Extra;
+  const rowsTop = y0 + SCORE_H + L.statsBlock + gap2;
+  if (n) { ctx.fillStyle = RULE; ctx.fillRect(PAD, rowsTop - gap2 / 2, W - PAD * 2, 2); }
+  const rowH = ROW * L.rs, fs = Math.min(1, 0.55 + 0.45 * L.rs);
+  const barX = 640, barW = 280, barH = 16 * fs, titleW = barX - (PAD + 68) - 28;
+  ctx.textBaseline = 'middle';
+  songs.forEach((s, i) => {
+    const cy = rowsTop + i * rowH + rowH / 2;
+    ctx.textAlign = 'right'; ctx.font = `italic 400 ${25 * fs}px ${FONT}`; ctx.fillStyle = MUTED;
+    ctx.fillText(String(i + 1), PAD + 36, cy);
+    ctx.textAlign = 'left'; ctx.font = `400 ${31 * fs}px ${FONT}`; ctx.fillStyle = INK;
+    ctx.fillText(fit(s.title.trim(), titleW), PAD + 68, cy);
+    ctx.fillStyle = TRACK; rr(barX, cy - barH / 2, barW, barH, barH / 2); ctx.fill();
+    ctx.textAlign = 'right'; ctx.font = `700 ${31 * fs}px ${FONT}`;
+    if (s.rating != null) {
+      ctx.fillStyle = colorFor(s.rating);
+      rr(barX, cy - barH / 2, Math.max(barH, barW * s.rating / 10), barH, barH / 2); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = EDGE; ctx.stroke();
+      ctx.fillStyle = INK; ctx.fillText(fmt(s.rating), W - PAD, cy);
+    } else {
+      ctx.fillStyle = MUTED; ctx.fillText('–', W - PAD, cy);
+    }
+  });
+
+  $('#avgText').textContent = avg != null
+    ? `Average of ${rated.length} rated song${rated.length === 1 ? '' : 's'}: ${fmt(avg)}`
+    : 'Rate at least one song to see the average.';
+  $('#layoutNote').textContent = state.showStats && rated.length < 2
+    ? 'Quick stats need at least two rated songs.' : '';
+  paintDots();
+  scheduleSave();
+}
+
+/* ---------- Song list ---------- */
+// Repaints the colored dot beside each song from the colors in use right now.
+// Called on every redraw, so it stays correct however the colors change (theme, palette, cover, import).
+function paintDots() {
+  listEl.querySelectorAll('.song').forEach(li => {
+    const s = state.songs.find(x => String(x.id) === li.dataset.id);
+    const sw = li.querySelector('.sw');
+    if (s && sw) sw.style.background = s.rating != null ? colorFor(s.rating) : '';
+  });
+}
+
+const GRIP = '<svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true" fill="currentColor">' +
+  [3, 10].map(x => [3, 10, 17].map(y => `<circle cx="${x}" cy="${y}" r="1.7"/>`).join('')).join('') + '</svg>';
+
+function renderList(focusId, field) {
+  listEl.innerHTML = '';
+  state.songs.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.className = 'song'; li.dataset.id = s.id;
+    li.innerHTML =
+      `<button type="button" class="h" aria-label="Move song ${i + 1}. Drag, or use the up and down arrow keys.">${GRIP}</button>
+       <input class="t" type="text" placeholder="Song title" autocomplete="off" aria-label="Title of song ${i + 1}">
+       <div class="rate"><span class="sw"></span>
+         <input class="rt" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" aria-label="Rating for song ${i + 1}">
+       </div>
+       <button type="button" class="x" aria-label="Remove song ${i + 1}">×</button>`;
+    const t = li.querySelector('.t'), rt = li.querySelector('.rt'), sw = li.querySelector('.sw'), h = li.querySelector('.h');
+    t.value = s.title;
+    rt.value = s.rating != null ? s.rating : '';
+    const paintSwatch = () => { sw.style.background = s.rating != null ? colorFor(s.rating) : ''; };
+    paintSwatch();
+
+    t.addEventListener('input', () => { s.title = t.value; draw(); });
+    rt.addEventListener('input', () => { s.rating = parseScore(rt.value); paintSwatch(); draw(); });
+    rt.addEventListener('change', () => { if (s.rating != null) rt.value = s.rating; });
+    t.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); rt.focus(); } });
+    rt.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const next = state.songs[i + 1];
+      if (next) renderList(next.id, 't'); else addSong(true);
+    });
+    li.querySelector('.x').addEventListener('click', () => {
+      state.songs.splice(i, 1);
+      if (!state.songs.length) state.songs.push({ id: ++uid, title: '', rating: null });
+      renderList();
+    });
+
+    /* reordering: keyboard */
+    h.addEventListener('keydown', e => {
+      const j = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : -1;
+      if (j < 0 || j >= state.songs.length) return;
+      e.preventDefault();
+      [state.songs[i], state.songs[j]] = [state.songs[j], state.songs[i]];
+      renderList(s.id, 'h');
+    });
+    /* reordering: pointer (mouse, touch, pen) */
+    h.addEventListener('pointerdown', e => {
+      if (e.button != null && e.button > 0) return;
+      e.preventDefault();
+      h.setPointerCapture(e.pointerId);
+      li.classList.add('dragging');
+      document.body.classList.add('is-dragging');
+      const onMove = ev => {
+        const y = ev.clientY;
+        let target = null;
+        for (const sib of listEl.children) {
+          if (sib === li) continue;
+          const r = sib.getBoundingClientRect();
+          if (y < r.top + r.height / 2) { target = sib; break; }
+        }
+        if (target) { if (li.nextElementSibling !== target) listEl.insertBefore(li, target); }
+        else if (listEl.lastElementChild !== li) listEl.appendChild(li);
+        if (y < 70) window.scrollBy(0, -14); else if (y > window.innerHeight - 70) window.scrollBy(0, 14);
+      };
+      const end = () => {
+        h.removeEventListener('pointermove', onMove);
+        h.removeEventListener('pointerup', end);
+        h.removeEventListener('pointercancel', end);
+        li.classList.remove('dragging');
+        document.body.classList.remove('is-dragging');
+        const order = [...listEl.children].map(c => Number(c.dataset.id));
+        state.songs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+        renderList(s.id, 'h');
+      };
+      h.addEventListener('pointermove', onMove);
+      h.addEventListener('pointerup', end);
+      h.addEventListener('pointercancel', end);
+    });
+    listEl.appendChild(li);
+  });
+  if (focusId != null) {
+    const el = listEl.querySelector(`[data-id="${focusId}"] .${field || 't'}`);
+    if (el) el.focus({ preventScroll: field === 'h' });
+  }
+  draw();
+}
+function addSong(focus) {
+  const s = { id: ++uid, title: '', rating: null };
+  state.songs.push(s);
+  renderList(focus ? s.id : undefined, 't');
+}
+
+/* ---------- Paste a tracklist ---------- */
+function parseLine(line) {
+  line = line.trim().replace(/^\d{1,2}[.)]\s+/, '');
+  const m = line.match(/^(.*\S)\s*(?:[-–—|:]|\t)\s*(10|\d(?:[.,]\d)?)(?:\s*\/\s*10)?\s*$/);
+  if (m) {
+    const r = parseFloat(m[2].replace(',', '.'));
+    if (r >= 1 && r <= 10) return { title: m[1].trim(), rating: r };
+  }
+  return { title: line, rating: null };
+}
+$('#pasteAdd').addEventListener('click', () => {
+  const lines = $('#paste').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  state.songs = state.songs.filter(s => s.title.trim() || s.rating != null);
+  lines.forEach(l => state.songs.push({ id: ++uid, ...parseLine(l) }));
+  $('#paste').value = '';
+  renderList();
+});
+
+/* ---------- Other controls ---------- */
+$('#title').addEventListener('input', e => { state.title = e.target.value; draw(); });
+$('#artist').addEventListener('input', e => { state.artist = e.target.value; draw(); });
+$('#year').addEventListener('input', e => { state.year = e.target.value; draw(); });
+$('#override').addEventListener('input', e => { state.override = e.target.value; draw(); });
+$('#addSong').addEventListener('click', () => addSong(true));
+
+$('#clearAll').addEventListener('click', () => {
+  Object.assign(state, { title: '', artist: '', year: '', override: '', cover: null });
+  state.songs = [{ id: ++uid, title: '', rating: null }];
+  $('#title').value = ''; $('#artist').value = ''; $('#year').value = ''; $('#override').value = '';
+  setCoverUi(null);
+  dropCoverStyles(); applyStyle(); paintStyleChips();
+  renderList(state.songs[0].id, 't');
+});
+
+/* ---------- Cover art ---------- */
+const DEFAULT_COVER_MSG = 'Without a cover, a color grid of your ratings is used.';
+function setCoverUi(name, msg) {
+  $('#coverClear').hidden = !name;
+  $('#coverName').textContent = msg || name || DEFAULT_COVER_MSG;
+}
+function mimeFor(file) {
+  if (file.type && file.type.startsWith('image/')) return file.type;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  return { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }[ext] || 'image/jpeg';
+}
+function loadCover(file) {
+  const fail = () => setCoverUi(state.cover ? file.name : null,
+    'That image could not be read. Try a JPG or PNG (iPhone HEIC photos are not supported).');
+  setCoverUi(null, 'Loading image…');
+  const reader = new FileReader();
+  reader.onerror = fail;
+  reader.onload = () => {
+    // Re-label the data with a correct image type so JPEGs with a missing or odd type still load.
+    const src = String(reader.result).replace(/^data:[^;,]*/, 'data:' + mimeFor(file));
+    const img = new Image();
+    img.onload = () => {
+      const iw = img.naturalWidth, ih = img.naturalHeight, m = Math.min(iw, ih);
+      if (!m) return fail();
+      const size = Math.min(m, 1000);
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      c.getContext('2d').drawImage(img, (iw - m) / 2, (ih - m) / 2, m, m, 0, 0, size, size);
+      state.cover = c;
+      setCoverUi(file.name);
+      applyStyle(); paintStyleChips();
+      draw();
+    };
+    img.onerror = fail;
+    img.src = src;
+  };
+  reader.readAsDataURL(file);
+}
+$('#coverBtn').addEventListener('click', () => $('#coverFile').click());
+$('#coverFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (f) loadCover(f);
+  e.target.value = '';
+});
+$('#coverClear').addEventListener('click', () => {
+  state.cover = null; setCoverUi(null);
+  dropCoverStyles(); applyStyle(); paintStyleChips();
+  draw();
+});
+
+/* ---------- Download ---------- */
+// Saving files works through the page's downloads capability when hosted; plain download links are inert there.
+let downloadsCap = null;
+try {
+  if (window.claude && typeof window.claude.use === 'function') {
+    window.claude.use('downloads').then(d => { downloadsCap = d; }).catch(() => {});
+  }
+} catch (e) {}
+
+$('#download').addEventListener('click', () => {
+  const slug = [state.artist, state.title].filter(x => x.trim()).join(' - ')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'album-rating';
+  cv.toBlob(async blob => {
+    if (downloadsCap) {
+      try {
+        await downloadsCap.save({ filename: slug + sizeSuffix() + '.png', data: blob });
+      } catch (err) {
+        if (!err || err.code !== 'declined') {
+          document.querySelector('.hint').textContent = 'The download could not start. Press and hold (or right-click) the image to save it.';
+        }
+      }
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = slug + sizeSuffix() + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }, 'image/png');
+});
+
+/* ---------- Color helpers (cover and custom styles) ---------- */
+const toHex = (r, g, b) => '#' + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  let rgb;
+  if (h < 60) rgb = [c, x, 0]; else if (h < 120) rgb = [x, c, 0]; else if (h < 180) rgb = [0, c, x];
+  else if (h < 240) rgb = [0, x, c]; else if (h < 300) rgb = [x, 0, c]; else rgb = [c, 0, x];
+  return toHex((rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255);
+}
+function mixHex(a, b, t) {
+  const A = hex(a), B = hex(b);
+  return toHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t);
+}
+function lumOf(c) {
+  const [r, g, b] = hex(c).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) { const x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+function rgbaOf(c, a) { const [r, g, b] = hex(c); return `rgba(${r},${g},${b},${a})`; }
+function lerpHue(a, b, t) { const d = ((b - a + 540) % 360) - 180; return (a + d * t + 360) % 360; }
+
+// Reads RGBA pixel data and finds the cover's main hue, a second hue, how colorful it is, and whether it is dark.
+function analyzePixels(d) {
+  const BINS = 36, w = Array(BINS).fill(0), sx = Array(BINS).fill(0), sy = Array(BINS).fill(0);
+  let n = 0, lumSum = 0, vividSum = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, dl = mx - mn;
+    n++; lumSum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (dl < 0.001) continue;
+    const span = 1 - Math.abs(2 * l - 1);
+    const s = dl / (span || 1);
+    let hh;
+    if (mx === r) hh = ((g - b) / dl) % 6; else if (mx === g) hh = (b - r) / dl + 2; else hh = (r - g) / dl + 4;
+    hh *= 60; if (hh < 0) hh += 360;
+    const v = s * span;                      // vivid = saturated, and neither very dark nor very light
+    if (v < 0.05) continue;
+    vividSum += v;
+    const bin = Math.floor(hh / 10) % BINS, rad = hh * Math.PI / 180;
+    w[bin] += v; sx[bin] += v * Math.cos(rad); sy[bin] += v * Math.sin(rad);
+  }
+  const sm = w.map((_, i) => w[i] + 0.5 * w[(i + BINS - 1) % BINS] + 0.5 * w[(i + 1) % BINS]);
+  const hueAt = i => {
+    let X = 0, Y = 0;
+    for (const j of [i - 1, i, i + 1]) { const k = (j + BINS) % BINS; X += sx[k]; Y += sy[k]; }
+    return (Math.atan2(Y, X) * 180 / Math.PI + 360) % 360;
+  };
+  let p1 = 0; sm.forEach((v, i) => { if (v > sm[p1]) p1 = i; });
+  const total = w.reduce((a, b) => a + b, 0);
+  const h1 = total > 0 ? hueAt(p1) : 35;
+  let p2 = -1;
+  sm.forEach((v, i) => {
+    const dist = Math.min((i - p1 + BINS) % BINS, (p1 - i + BINS) % BINS);
+    if (total > 0 && dist >= 5 && v >= 0.12 * sm[p1] && (p2 < 0 || v > sm[p2])) p2 = i;
+  });
+  const h2 = p2 >= 0 ? hueAt(p2) : (h1 + 320) % 360;
+  return {
+    h1, h2,
+    colorful: Math.max(0.2, Math.min(1, n ? (vividSum / n) * 4 : 0)),
+    dark: n ? lumSum / n < 0.38 : false
+  };
+}
+function coverStyleFrom(a) {
+  const h = a.h1, k = a.colorful;
+  const theme = a.dark ? {
+    BG: hslToHex(h, 0.38 * k, 0.13), TRACK: hslToHex(h, 0.30 * k, 0.21), TILE_EMPTY: hslToHex(h, 0.28 * k, 0.27),
+    INK: hslToHex(h, 0.30 * k, 0.94), MUTED: hslToHex(h, 0.16 * k + 0.04, 0.70), RULE: hslToHex(h, 0.28 * k, 0.25),
+    EDGE: 'rgba(255,255,255,0.18)'
+  } : {
+    BG: hslToHex(h, 0.45 * k, 0.93), TRACK: hslToHex(h, 0.38 * k, 0.87), TILE_EMPTY: hslToHex(h, 0.35 * k, 0.82),
+    INK: hslToHex(h, 0.32 * k + 0.06, 0.20), MUTED: hslToHex(h, 0.18 * k + 0.04, 0.42), RULE: hslToHex(h, 0.35 * k, 0.85)
+  };
+  if (!a.dark) theme.EDGE = rgbaOf(theme.INK, 0.16);
+  // Rating colors: a ramp from the cover's second hue (low ratings) to its main hue (high ratings).
+  const stops = Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    return hslToHex(lerpHue(a.h2, h, t), (0.50 + 0.12 * t) * Math.max(k, 0.45), 0.76 - 0.32 * t);
+  });
+  return { theme, stops };
+}
+const coverStyleCache = { canvas: null, value: null };
+function coverStyle() {
+  if (!state.cover) return null;
+  if (coverStyleCache.canvas !== state.cover) {
+    let value = null;
+    try {
+      const t = document.createElement('canvas');
+      t.width = t.height = 40;
+      const x = t.getContext('2d', { willReadFrequently: true });
+      x.drawImage(state.cover, 0, 0, 40, 40);
+      value = coverStyleFrom(analyzePixels(x.getImageData(0, 0, 40, 40).data));
+    } catch (e) { value = null; }
+    coverStyleCache.canvas = state.cover; coverStyleCache.value = value;
+  }
+  return coverStyleCache.value;
+}
+function customTheme() {
+  const { bg, ink } = state.custom;
+  return {
+    BG: bg, INK: ink, TRACK: mixHex(bg, ink, 0.08), TILE_EMPTY: mixHex(bg, ink, 0.15),
+    MUTED: mixHex(ink, bg, 0.45), RULE: mixHex(bg, ink, 0.12), EDGE: rgbaOf(ink, 0.16)
+  };
+}
+function customStops() {
+  const { low, mid, high } = state.custom;
+  return Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    return t <= 0.5 ? mixHex(low, mid, t * 2) : mixHex(mid, high, (t - 0.5) * 2);
+  });
+}
+function resolveTheme(id) {
+  if (id === 'cover') { const c = coverStyle(); return c ? c.theme : null; }
+  if (id === 'custom') return customTheme();
+  return has(THEMES, id) ? THEMES[id] : null;
+}
+function resolveStops(id) {
+  if (id === 'cover') { const c = coverStyle(); return c ? c.stops : null; }
+  if (id === 'custom') return customStops();
+  return has(PALETTES, id) ? PALETTES[id].stops : null;
+}
+// If the cover goes away, styles that depend on it go back to the defaults.
+function dropCoverStyles() {
+  if (state.style.theme === 'cover') state.style.theme = 'cream';
+  if (state.style.palette === 'cover') state.style.palette = 'pastel';
+}
+
+/* ---------- Style controls ---------- */
+function applyStyle() {
+  const t = resolveTheme(state.style.theme) || THEMES.cream;
+  BG = t.BG; TRACK = t.TRACK; TILE_EMPTY = t.TILE_EMPTY; INK = t.INK; MUTED = t.MUTED; RULE = t.RULE; EDGE = t.EDGE;
+  STOPS = resolveStops(state.style.palette) || PALETTES.pastel.stops;
+  FONT = FONTS[state.style.font].stack;
+}
+
+const styleChips = { theme: [], palette: [], font: [] };
+const customDirty = { theme: false, palette: false };
+const STRIPES = 'repeating-linear-gradient(45deg,#E3DACB 0 5px,#F3ECDD 5px 10px)';
+
+function paintStyleChips() {
+  const hasCover = !!coverStyle();
+  styleChips.theme.forEach(({ id, chip, sw }) => {
+    const t = resolveTheme(id);
+    sw.style.background = t ? t.BG : STRIPES;
+    sw.style.color = t ? t.INK : '#85766D';
+    const off = id === 'cover' && !hasCover;
+    chip.disabled = off;
+    chip.title = off ? 'Add cover art first' : '';
+    chip.setAttribute('aria-pressed', String(state.style.theme === id));
+  });
+  styleChips.palette.forEach(({ id, chip, sw }) => {
+    const s = resolveStops(id);
+    // Set only the image: the background shorthand would reset the no-repeat and clip rules in the stylesheet.
+    sw.style.backgroundImage = s ? 'linear-gradient(90deg,' + s.join(',') + ')' : STRIPES;
+    const off = id === 'cover' && !hasCover;
+    chip.disabled = off;
+    chip.title = off ? 'Add cover art first' : '';
+    chip.setAttribute('aria-pressed', String(state.style.palette === id));
+  });
+  styleChips.font.forEach(({ id, chip }) => chip.setAttribute('aria-pressed', String(state.style.font === id)));
+
+  $('#customTheme').hidden = state.style.theme !== 'custom';
+  $('#customPalette').hidden = state.style.palette !== 'custom';
+  $('#cBg').value = state.custom.bg; $('#cInk').value = state.custom.ink;
+  $('#cLow').value = state.custom.low; $('#cMid').value = state.custom.mid; $('#cHigh').value = state.custom.high;
+
+  const notes = [];
+  if (!hasCover) notes.push('To use "From cover", add cover art first.');
+  if (state.style.theme === 'custom' && contrast(state.custom.bg, state.custom.ink) < 4.5) {
+    notes.push('These background and text colors may be hard to read together.');
+  }
+  $('#themeNote').textContent = notes.join(' ');
+  $('#paletteNote').textContent = hasCover ? '' : 'To use "From cover", add cover art first.';
+}
+
+function buildStyleControls() {
+  styleChips.theme = []; styleChips.palette = []; styleChips.font = [];
+  const groups = [
+    ['theme', '#themeChips', THEMES, 'sw-theme'],
+    ['palette', '#paletteChips', PALETTES, 'sw-strip'],
+    ['font', '#fontChips', FONTS, 'sw-theme']
+  ];
+  groups.forEach(([key, sel, options, swClass]) => {
+    const box = $(sel);
+    box.innerHTML = '';
+    Object.entries(options).forEach(([id, o]) => {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'chip';
+      const sw = document.createElement('span');
+      sw.className = swClass;
+      if (key !== 'palette') sw.textContent = 'Aa';
+      if (key === 'font') { sw.style.fontFamily = o.stack; sw.style.background = '#FFFDF8'; sw.style.color = '#4A3F3B'; }
+      chip.appendChild(sw);
+      const label = document.createElement('span');
+      label.textContent = o.name;
+      chip.appendChild(label);
+      chip.addEventListener('click', () => {
+        // The first time Custom is picked, start from the colors currently showing.
+        if (id === 'custom' && state.style[key] !== 'custom') {
+          if (key === 'theme' && !customDirty.theme) { state.custom.bg = BG; state.custom.ink = INK; }
+          if (key === 'palette' && !customDirty.palette) {
+            state.custom.low = STOPS[0]; state.custom.mid = mixHex(STOPS[4], STOPS[5], 0.5); state.custom.high = STOPS[9];
+          }
+        }
+        state.style[key] = id;
+        applyStyle();
+        paintStyleChips();
+        renderList();
+      });
+      box.appendChild(chip);
+      styleChips[key].push({ id, chip, sw });
+    });
+  });
+  paintStyleChips();
+}
+
+[['#cBg', 'bg', 'theme'], ['#cInk', 'ink', 'theme'], ['#cLow', 'low', 'palette'], ['#cMid', 'mid', 'palette'], ['#cHigh', 'high', 'palette']]
+  .forEach(([sel, key, group]) => {
+    $(sel).addEventListener('input', e => {
+      if (HEX6.test(e.target.value)) state.custom[key] = e.target.value.toLowerCase();
+      customDirty[group] = true;
+      applyStyle();
+      paintStyleChips();
+      renderList();
+    });
+  });
+
+/* ---------- Export and import a whole rating ---------- */
+function fileSlug() {
+  return [state.artist, state.title].filter(x => x.trim()).join(' - ')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'album-rating';
+}
+function fileStatus(msg) { $('#fileStatus').textContent = msg; }
+
+// Cover images are re-encoded as small JPEGs for saving; the result is cached per cover.
+const coverCache = { canvas: null, urls: {} };
+function encodeCover(size, quality) {
+  if (!state.cover) return null;
+  if (coverCache.canvas !== state.cover) { coverCache.canvas = state.cover; coverCache.urls = {}; }
+  const key = size + ':' + quality;
+  if (!coverCache.urls[key]) {
+    const px = Math.min(size, state.cover.width);
+    const c = document.createElement('canvas');
+    c.width = c.height = px;
+    const x = c.getContext('2d');
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, px, px);
+    x.drawImage(state.cover, 0, 0, px, px);
+    coverCache.urls[key] = c.toDataURL('image/jpeg', quality);
+  }
+  return coverCache.urls[key];
+}
+
+function buildExport(coverSize = 800, quality = 0.88, withCover = true) {
+  return {
+    app: 'album-rating-card', version: 1,
+    title: state.title, artist: state.artist, year: state.year,
+    albumScore: state.override,
+    style: { ...state.style },
+    custom: { ...state.custom },
+    layout: { size: state.size, sortByRating: state.sortByRating, showStats: state.showStats },
+    songs: state.songs.filter(s => s.title.trim() || s.rating != null).map(s => ({ title: s.title, rating: s.rating })),
+    cover: withCover ? encodeCover(coverSize, quality) : null
+  };
+}
+
+function coverFromSrc(src, label) {
+  const img = new Image();
+  img.onload = () => {
+    const iw = img.naturalWidth, ih = img.naturalHeight, m = Math.min(iw, ih);
+    if (!m) return;
+    const size = Math.min(m, 1000);
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    c.getContext('2d').drawImage(img, (iw - m) / 2, (ih - m) / 2, m, m, 0, 0, size, size);
+    state.cover = c;
+    setCoverUi(label);
+    applyStyle(); paintStyleChips();
+    draw();
+  };
+  img.onerror = () => { dropCoverStyles(); applyStyle(); paintStyleChips(); draw(); };
+  img.src = src;
+}
+
+// Validates and loads a parsed file. Throws if it does not look like a saved rating.
+function applyImported(d) {
+  if (!d || typeof d !== 'object' || !Array.isArray(d.songs)) throw new Error('format');
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  state.title = str(d.title, 200);
+  state.artist = str(d.artist, 200);
+  state.year = str(d.year, 20);
+  const ov = parseScore(d.albumScore);
+  state.override = ov != null ? String(ov) : '';
+  state.songs = d.songs.slice(0, 200).map(s => ({
+    id: ++uid, title: str(s && s.title, 200), rating: s ? parseScore(s.rating) : null
+  }));
+  const count = state.songs.filter(s => s.title.trim()).length;
+  if (!state.songs.length) state.songs.push({ id: ++uid, title: '', rating: null });
+
+  const st = d.style && typeof d.style === 'object' ? d.style : {};
+  const coverOk = typeof d.cover === 'string' && d.cover.length < 8e6 &&
+    /^data:image\/(jpeg|png|webp|gif);base64,/.test(d.cover);
+  state.style = {
+    theme:   has(THEMES, st.theme)     && (st.theme !== 'cover' || coverOk)     ? st.theme   : 'cream',
+    palette: has(PALETTES, st.palette) && (st.palette !== 'cover' || coverOk)   ? st.palette : 'pastel',
+    font:    has(FONTS, st.font)       ? st.font    : 'serif'
+  };
+  const cu = d.custom && typeof d.custom === 'object' ? d.custom : null;
+  state.custom = {};
+  Object.keys(DEFAULT_CUSTOM).forEach(k => {
+    state.custom[k] = cu && typeof cu[k] === 'string' && HEX6.test(cu[k]) ? cu[k].toLowerCase() : DEFAULT_CUSTOM[k];
+  });
+  customDirty.theme = customDirty.palette = !!cu;
+  const lay = d.layout && typeof d.layout === 'object' ? d.layout : {};
+  state.size = has(SIZES, lay.size) ? lay.size : 'tall';
+  state.sortByRating = lay.sortByRating === true;
+  state.showStats = lay.showStats === true;
+
+  state.cover = null;
+  setCoverUi(null);
+  $('#title').value = state.title; $('#artist').value = state.artist; $('#year').value = state.year;
+  $('#override').value = state.override;
+  applyStyle(); buildStyleControls(); buildLayoutControls(); renderList();
+
+  if (coverOk) {
+    coverFromSrc(d.cover, 'Cover from the saved rating');
+  }
+  return count;
+}
+
+$('#exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(buildExport(), null, 2)], { type: 'application/json' });
+  const name = fileSlug() + '-rating.json';
+  if (downloadsCap) {
+    downloadsCap.save({ filename: name, data: blob })
+      .then(() => fileStatus('Exported ' + name))
+      .catch(err => { if (!err || err.code !== 'declined') fileStatus('The file could not be saved.'); });
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  fileStatus('Exported ' + name);
+});
+
+$('#importBtn').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  if (f.size > 10 * 1024 * 1024) { fileStatus('That file is too large to be a saved rating.'); return; }
+  const reader = new FileReader();
+  reader.onerror = () => fileStatus('That file could not be read.');
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(String(reader.result)); }
+    catch (err) { fileStatus('That file is not a saved rating (it could not be read as JSON).'); return; }
+    try {
+      const n = applyImported(data);
+      fileStatus(`Loaded ${state.title ? '"' + state.title + '"' : 'the rating'} with ${n} song${n === 1 ? '' : 's'}.`);
+    } catch (err) {
+      fileStatus('That file does not look like a rating saved from this tool.');
+    }
+  };
+  reader.readAsText(f);
+});
+
+/* ---------- Layout controls ---------- */
+const sizeSuffix = () => state.size === 'tall' ? '' : '-' + state.size;
+function buildLayoutControls() {
+  const box = $('#sizeChips');
+  box.innerHTML = '';
+  Object.entries(SIZES).forEach(([id, o]) => {
+    const chip = document.createElement('button');
+    chip.type = 'button'; chip.className = 'chip'; chip.title = o.hint;
+    const sw = document.createElement('span'); sw.className = 'sw-theme';
+    const r = document.createElement('span'); r.className = 'ratio';
+    r.style.width = o.icon[0] + 'px'; r.style.height = o.icon[1] + 'px';
+    sw.appendChild(r); chip.appendChild(sw);
+    const label = document.createElement('span'); label.textContent = o.name; chip.appendChild(label);
+    chip.setAttribute('aria-pressed', String(state.size === id));
+    chip.addEventListener('click', () => {
+      state.size = id;
+      box.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c === chip)));
+      draw();
+    });
+    box.appendChild(chip);
+  });
+  $('#sortToggle').checked = state.sortByRating;
+  $('#statsToggle').checked = state.showStats;
+}
+$('#sortToggle').addEventListener('change', e => { state.sortByRating = e.target.checked; draw(); });
+$('#statsToggle').addEventListener('change', e => { state.showStats = e.target.checked; draw(); });
+
+/* ---------- Autosave (this browser only) ---------- */
+const SAVE_KEY = 'albumRatingCard.autosave.v1';
+let suppressSave = false, saveTimer = null;
+function saveMsg(t) { $('#saveState').textContent = t; }
+function scheduleSave() {
+  if (suppressSave) return;
+  saveMsg('Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 600);
+}
+function doSave() {
+  let note = '';
+  try {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(buildExport(400, 0.8)));
+    } catch (e) {
+      // Probably too large: try again without the cover image.
+      localStorage.setItem(SAVE_KEY, JSON.stringify(buildExport(0, 0, false)));
+      note = ' (without the cover image)';
+    }
+    const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    saveMsg('Autosaved' + note + ' at ' + time);
+  } catch (e) {
+    saveMsg('Autosave is not available in this browser. Use Export to keep your work.');
+  }
+}
+
+/* ---------- Section index ---------- */
+(function setupToc() {
+  const links = Array.from(document.querySelectorAll('.toc a'));
+  const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const targets = links.map(a => document.getElementById(a.getAttribute('href').slice(1)));
+  links.forEach((a, i) => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const t = targets[i];
+      if (!t) return;
+      t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      t.setAttribute('tabindex', '-1');
+      t.focus({ preventScroll: true });
+      lock = i;
+      mark(i);
+    });
+  });
+  function mark(idx) {
+    links.forEach((a, i) => { if (i === idx) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
+    const cur = links[idx];
+    if (cur && cur.scrollIntoView && getComputedStyle(cur.closest('ul')).flexDirection === 'row') {
+      cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+  // After a click the clicked link stays highlighted until the person scrolls by hand.
+  let lock = null;
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(ev =>
+    window.addEventListener(ev, e => { if (ev !== 'mousedown' || !e.target.closest || !e.target.closest('.toc')) lock = null; }, { passive: true }));
+  let ticking = false;
+  function update() {
+    ticking = false;
+    if (!targets.length) return;
+    if (lock !== null) { mark(lock); return; }
+    const line = Math.max(90, window.innerHeight * 0.3);
+    let idx = 0;
+    // The preview sits beside the editor on wide screens (and stays in view), so it only counts when stacked below it.
+    const stacked = window.innerWidth <= 880;
+    targets.forEach((t, i) => {
+      if (!t || (t.id === 'sec-preview' && !stacked)) return;
+      if (t.getBoundingClientRect().top <= line) idx = i;
+    });
+    // At the very bottom of the page, highlight the last section that is visible.
+    if (!stacked && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      const lastEditor = targets.findIndex(t => t && t.id === 'sec-save');
+      if (lastEditor >= 0 && targets[lastEditor].getBoundingClientRect().top < window.innerHeight * 0.7) idx = lastEditor;
+    }
+    mark(idx);
+  }
+  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})();
+
+/* ---------- Start ---------- */
+let restored = false;
+try {
+  let raw = localStorage.getItem(SAVE_KEY);
+  // An autosave that is just the old built-in example gives way to the current example.
+  try { const d = raw && JSON.parse(raw); if (d && d.title === 'Slow Tides' && d.artist === 'Marlo Vance') raw = null; } catch (e) {}
+  if (raw) { suppressSave = true; applyImported(JSON.parse(raw)); restored = true; }
+} catch (e) { restored = false; }
+suppressSave = false;
+if (restored) {
+  saveMsg('Restored your last session.');
+} else {
+  $('#title').value = state.title; $('#artist').value = state.artist; $('#year').value = state.year;
+  applyStyle();
+  buildStyleControls();
+  buildLayoutControls();
+  renderList();
+}
+</script>
+<script>
+(function(){var b=document.getElementById('themeBtn');if(!b)return;
+function cur(){return document.documentElement.dataset.theme==='dark'?'dark':'light'}
+function sync(){var d=cur()==='dark';b.setAttribute('aria-pressed',String(d));b.title=d?'Switch to light theme':'Switch to dark theme';b.setAttribute('aria-label',b.title)}
+b.addEventListener('click',function(){var n=cur()==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('musicTools.theme',n)}catch(e){}sync()});
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(e){if(!localStorage.getItem('musicTools.theme')){document.documentElement.dataset.theme=e.matches?'dark':'light';sync()}})}catch(e){}
+sync()})();
+</script>
+<script src="../tools.js"></script>
+</body>
+</html>
