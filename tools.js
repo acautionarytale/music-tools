@@ -32,14 +32,14 @@ window.MUSIC_TOOLS = [
     href: "streams-table/index.html",
     img: "assets/streams-table-preview.png", w: 1000, h: 750,
     alt: "Example table of monthly streams per album with green and red percent changes",
-    desc: "Make a table image of daily average streams by month, with month-over-month change, for a set of albums, songs or artists. Upload a sheet or type in monthly totals."
+    desc: "Make a table image of daily average streams by day, week, month or year, with change from the period before, for a set of albums, songs or artists. Import from Spotify, upload a sheet or type in totals."
   },
   {
     id: "cumulative-streams", name: "Cumulative streams graph", tag: "Graph",
     href: "cumulative-streams/index.html",
     img: "assets/cumulative-streams-preview.png", w: 1000, h: 750,
     alt: "Line graph of cumulative streams for several albums over time",
-    desc: "Plot the running total of streams for several albums, artists or tracks over any stretch of time, as lines or stacked areas."
+    desc: "Plot the running total of streams for several albums, artists or tracks by day, week, month or year, as lines or stacked areas."
   },
 ];
 

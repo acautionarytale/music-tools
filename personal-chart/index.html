@@ -132,6 +132,10 @@
       <button class="alt small" id="addWeek">Add week</button>
     </div>
     <div class="row">
+      <label>Weeks start on <select id="weekStart"></select></label>
+      <label><input type="checkbox" id="rangeSub"> Subtitle shows the whole week (Oct 2–8)</label>
+    </div>
+    <div class="row">
       <button class="alt small" id="expCsv">Export data (.csv)</button>
       <button class="alt small" id="expXlsx">Export data (.xlsx)</button>
       <button class="alt small" id="copyCsv">Copy as CSV</button>
@@ -302,7 +306,7 @@ function paintChips(){
 
 /* ---------------- state ---------------- */
 let weeks = {};   // "YYYY-MM-DD" (the date the week ends) -> [{ t:title, a:artist, n:streams }]
-let ui = { week:null, size:100, show:10, move:true, lw:true, peak:true, wks:true, streams:true, cStreams:true, cPeak:true, cRows:true };
+let ui = { start:5, range:false, week:null, size:100, show:10, move:true, lw:true, peak:true, wks:true, streams:true, cStreams:true, cPeak:true, cRows:true };
 let titleDirty = false, subDirty = false;
 
 const pad2 = n => String(n).padStart(2,"0");
@@ -347,6 +351,7 @@ function loadSaved(){
     const s = JSON.parse(localStorage.getItem(LS_KEY));
     if (s && s.weeks && typeof s.weeks==="object" && Object.keys(s.weeks).length){
       weeks = s.weeks; Object.assign(ui, s.ui||{});
+      if (!s.ui || s.ui.start == null){ const last = Object.keys(weeks).sort().pop(); ui.start = (fromIso(last).getDay()+1)%7; }   // saved before the start day was a choice: keep the weekday already in use
       if (!s.ui || s.ui.show == null) ui.show = ui.size;   // charts saved before the two counts were separated showed the whole chart
       const st = s.style||{};
       if (has(THEMES, st.themeId)) style.themeId=st.themeId;
@@ -481,9 +486,37 @@ $("file").addEventListener("change", e => {
 });
 
 /* ---------------- weeks ---------------- */
-function defaultNewWeek(){ const ws = sortedWeeks(); return ws.length ? addDays(ws[ws.length-1], 7) : toIso(new Date()); }
+const DAYNAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const endDow = () => (ui.start+6)%7;
+// the first date on or after iso that falls on the day weeks end
+function snapEnd(iso){ const d = fromIso(iso); return addDays(iso, (endDow() - d.getDay() + 7) % 7); }
+// "Oct 2–8, 2026", "Sep 25 – Oct 1, 2026" or "Dec 29, 2026 – Jan 4, 2027" for the week ending on iso
+function fmtRange(iso){
+  const e = fromIso(iso), s = fromIso(addDays(iso,-6)), mo = d => d.toLocaleDateString("en-US",{month:"short"});
+  if (s.getFullYear()!==e.getFullYear()) return fmtDate(toIso(s))+" – "+fmtDate(iso);
+  if (s.getMonth()!==e.getMonth()) return mo(s)+" "+s.getDate()+" – "+mo(e)+" "+e.getDate()+", "+e.getFullYear();
+  return mo(s)+" "+s.getDate()+"–"+e.getDate()+", "+e.getFullYear();
+}
+function defaultNewWeek(){
+  const ws = sortedWeeks();
+  if (ws.length) return addDays(ws[ws.length-1], 7);
+  const t = toIso(new Date()); return addDays(snapEnd(t), -7);   // the most recent week that has finished
+}
+function fillStart(){
+  const sel = $("weekStart");
+  if (!sel.options.length) sel.innerHTML = DAYNAMES.map((d,i)=>`<option value="${i}">${d}${i===5?" (Fri–Thu, like Billboard)":""}</option>`).join("");
+  sel.value = String(ui.start); $("rangeSub").checked = !!ui.range;
+}
+$("weekStart").addEventListener("change", () => {
+  ui.start = Number($("weekStart").value);
+  $("newWeek").value = defaultNewWeek();
+  const odd = sortedWeeks().filter(d => fromIso(d).getDay()!==endDow()).length;
+  $("dataMsg").textContent = `New weeks will run ${DAYNAMES[ui.start]} to ${DAYNAMES[endDow()]}.` + (odd ? " Weeks already entered keep their dates." : "");
+  subDirty = false; refreshAll();
+});
+$("rangeSub").addEventListener("change", () => { ui.range = $("rangeSub").checked; subDirty = false; refreshAll(); });
 function fillWeeks(){
-  ensureSel();
+  ensureSel(); fillStart();
   const ws = sortedWeeks().reverse();
   $("week").innerHTML = ws.length ? ws.map(d => `<option value="${d}" ${d===ui.week?"selected":""}>${esc(fmtDate(d))}</option>`).join("") : '<option value="">(none yet)</option>';
   $("delWeek").disabled = !ws.length;
@@ -491,8 +524,9 @@ function fillWeeks(){
 }
 $("week").addEventListener("change", () => { ui.week = $("week").value; titleDirty = false; subDirty = false; refreshAll(); });
 $("addWeek").addEventListener("click", () => {
-  const v = $("newWeek").value;
+  let v = $("newWeek").value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)){ $("dataMsg").textContent = "Pick the date the week ends."; return; }
+  const picked = v; v = snapEnd(v);
   if (!weeks[v]){
     let list = [];
     const before = sortedWeeks().filter(d => d<v).pop();
@@ -502,14 +536,19 @@ $("addWeek").addEventListener("click", () => {
     }
     weeks[v] = list;
   }
-  ui.week = v; subDirty = false; $("dataMsg").textContent = ""; refreshAll();
+  ui.week = v; subDirty = false;
+  $("dataMsg").textContent = v!==picked ? `Weeks run ${DAYNAMES[ui.start]} to ${DAYNAMES[endDow()]}, so this week ends ${fmtDate(v)}.` : "";
+  refreshAll();
 });
 $("delWeek").addEventListener("click", () => { if (ui.week) delete weeks[ui.week]; ui.week = null; subDirty = false; refreshAll(); });
 $("spBtn").addEventListener("click", ()=>{
-  SpotifyImport.open({ mode:"chart", onImport:(res, msg)=>{
-    if ($("replace").checked) weeks = res; else Object.assign(weeks, res);
+  SpotifyImport.open({ mode:"chart", weekStart:ui.start, onImport:(res, msg, meta)=>{
+    const replace = $("replace").checked, oldStart = ui.start;
+    const mixed = !replace && sortedWeeks().some(d => fromIso(d).getDay()!==(meta.weekStart+6)%7);
+    if (replace) weeks = res; else Object.assign(weeks, res);
+    ui.start = meta.weekStart;
     ui.week = Object.keys(res).sort().pop(); titleDirty = false; subDirty = false;
-    $("loadMsg").textContent = msg; refreshAll();
+    $("loadMsg").textContent = msg + (mixed ? ` Some earlier weeks end on a different day. Tick "Replace existing data" if you want every week to run ${DAYNAMES[ui.start]} to ${DAYNAMES[endDow()]}.` : ""); refreshAll();
   }});
 });
 $("clearAll").addEventListener("click", () => { weeks = {}; ui.week = null; titleDirty = false; subDirty = false; $("dataMsg").textContent = "Cleared."; refreshAll(); });
@@ -622,7 +661,7 @@ function renderChart(){
   const date = ui.week, N = ui.size, SHOW = Math.min(ui.show, N);
   const rows = date && weeks[date] ? chartFor(date, N).filter(r => r.rank<=SHOW) : [];
   if (!titleDirty) $("title").value = "My Hot " + N + (SHOW<N ? ": Top " + SHOW : "");
-  if (!subDirty) $("subtitle").value = date ? "Week ending " + fmtDate(date) : "";
+  if (!subDirty) $("subtitle").value = date ? (ui.range ? "Week of " + fmtRange(date) : "Week ending " + fmtDate(date)) : "";
 
   const W = 1000, padX = 56, headTop = 44, headH = 112, colHeadH = 40;
   const useKey = ui.cRows || ui.cPeak, footH = useKey ? 112 : 72;

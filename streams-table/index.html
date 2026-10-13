@@ -20,6 +20,7 @@
   .homelink:hover { color:var(--ink); text-decoration:underline; }
   .card { background:var(--paper); border-radius:16px; padding:20px; margin-bottom:16px; }
   .card h2 { font-size:19px; margin:0 0 14px; }
+  [hidden] { display:none !important; }
   .row { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:10px; }
   .row:last-child { margin-bottom:0; }
   label { font-size:15px; color:var(--muted); display:flex; align-items:center; gap:8px; }
@@ -98,7 +99,7 @@
 <div class="wrap">
   <a class="homelink" href="../index.html">← All tools</a>
   <h1>Streams Table Maker</h1>
-  <p class="sub">Make a shareable PNG of average daily streams by month, with green/red change, for albums, songs or artists. Upload a streams sheet or type the numbers in.</p>
+  <p class="sub">Make a shareable PNG of average daily streams by day, week, month or year, with green/red change, for albums, songs or artists. Import from Spotify, upload a streams sheet or type the numbers in.</p>
 
   <!-- DATA -->
   <div class="card">
@@ -116,16 +117,26 @@
       <button class="alt small" id="spBtn">Import from Spotify</button>
     </div>
     <div class="msg" id="loadMsg"></div>
-    <div class="row" id="artistRow" style="margin-top:10px">
+    <div class="row" style="margin-top:10px">
+      <label>Period <select id="grain"></select></label>
+      <label id="wsLabel" hidden>Weeks start on <select id="ws"></select></label>
+      <span class="msg" id="grainMsg">Uploads pick their own period from the dates: first-of-month dates are monthly, dates a week apart are weekly, other dates are daily.</span>
+    </div>
+    <div class="row" id="artistRow">
       <label>Artist <select id="artist"></select></label>
       <label>Name <input type="text" id="artistName"></label>
       <button class="alt small" id="addArtist">+ Artist</button>
       <button class="danger small" id="delArtist">Delete artist</button>
     </div>
-    <div class="row">
+    <div class="row" id="yearRow">
       <label>Year <select id="year"></select></label>
       <label>Add year <input type="number" id="newYear" placeholder="2025"></label>
       <button class="alt small" id="addYear">Add</button>
+    </div>
+    <div class="row" id="winRow" hidden>
+      <label>Columns <input type="number" id="winN" min="2" max="31" style="width:76px"></label>
+      <label>Ending <input type="date" id="winEnd"></label>
+      <button class="alt small" id="winLatest">Latest</button>
     </div>
     <div class="row">
       <button class="alt small" id="expCsv">Export data (.csv)</button>
@@ -139,13 +150,13 @@
   <!-- EDITOR -->
   <div class="card">
     <details open>
-      <summary>2. Enter / edit streams (monthly totals)</summary>
+      <summary id="entryTitle">2. Enter / edit streams (monthly totals)</summary>
       <div class="gridwrap" id="grid"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="newAlbum">
         <button class="alt small" id="addAlbum"></button>
       </div>
-      <p class="hint">Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in "Entry order"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
+      <p class="hint" id="entryHint">Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in "Entry order"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
     </details>
   </div>
 
@@ -164,8 +175,8 @@
         </select>
       </label>
       <label><input type="checkbox" id="showPct" checked> % change</label>
-      <label><input type="checkbox" id="showLast" checked> Include last month</label>
-      <label>Days in last month <input type="number" id="lastDays" min="1" max="31"></label>
+      <label><input type="checkbox" id="showLast" checked> <span id="showLastTxt">Include last month</span></label>
+      <label id="lastDaysL"><span id="lastDaysTxt">Days in last month</span> <input type="number" id="lastDays" min="1" max="31"></label>
       <label>Sort
         <select id="sort">
           <option value="entry">Entry order</option>
@@ -193,30 +204,32 @@
   <canvas id="cv"></canvas>
 </div>
 
+<script src="../periods.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const LS_KEY = "streamsTables.v1";
 const LEGACY = { albums:"streamsTableMaker.v1", artists:"artistStreamsTable.v1" };   // saved by the two earlier, separate tools
 const GROUP = "Artists";   // the artists table has one list of rows; it is stored under this single key
 const KIND_IDS = ["albums","songs","artists"];
 const KINDS = {
   albums:  { label:"Albums",  one:"album",  One:"Album",  many:"albums",  grouped:true,  names:["album","release","title"],
-             cols:"Columns needed: Month, Album, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
+             cols:"Columns needed: Month (or a date), Album, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
   songs:   { label:"Songs",   one:"song",   One:"Song",   many:"songs",   grouped:true,  names:["song","track","title"],
-             cols:"Columns needed: Month, Song, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
+             cols:"Columns needed: Month (or a date), Song, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
   artists: { label:"Artists", one:"artist", One:"Artist", many:"artists", grouped:false, names:["artist","name"],
-             cols:"Columns needed: Month, Artist, Streams. Each artist becomes a row in the table." }
+             cols:"Columns needed: Month (or a date), Artist, Streams. Each artist becomes a row in the table." }
 };
+const P = Periods;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
-const daysIn = (y,m) => new Date(y,m,0).getDate();
-const emptyArr = () => Array(12).fill(null);
 const canvas = $("cv"), ctx = canvas.getContext("2d"), S = 2;
+const DEF_WS = 1;   // new weekly data starts on Monday; Friday (like Billboard) is one pick away
 
 let kind = "albums";
-const data = { albums:{artists:{}}, songs:{artists:{}}, artists:{artists:{}} };
-const uis = { albums:{artist:null,year:null}, songs:{artist:null,year:null}, artists:{artist:null,year:null} };
+const blankSet = (grain="month", ws=DEF_WS) => ({ grain, ws, artists:{} });
+const newUi = () => ({ artist:null, year:null, n:null, end:null, extra:[] });
+const data = { albums:blankSet(), songs:blankSet(), artists:blankSet() };
+const uis = { albums:newUi(), songs:newUi(), artists:newUi() };
 let state = data.albums, ui = uis.albums;
 const K = () => KINDS[kind];
 let titleDirty = false, lastDaysKey = "";
@@ -224,12 +237,14 @@ let titleDirty = false, lastDaysKey = "";
 /* ---------------- state ---------------- */
 function sampleFor(k){
   const y = new Date().getFullYear();
-  const mk = a => a.concat(Array(12-a.length).fill(null));
   // Placeholder numbers: one listener's plausible monthly plays, not real data. Dec of the previous year is included so the % change column has something to compare with.
   const build = (group, rows) => {
-    const prev = {}, cur = {};
-    rows.forEach(([n,dec,v]) => { prev[n] = Array(11).fill(null).concat([dec]); cur[n] = mk(v); });
-    return { artists: { [group]: { order: rows.map(r=>r[0]), years: { [y-1]:prev, [y]:cur } } } };
+    const vals = {};
+    rows.forEach(([n,dec,v]) => {
+      const m = vals[n] = {}; m[P.key("month",(y-1)*12+11,1)] = dec;
+      v.forEach((x,i) => { if (x!=null) m[P.key("month",y*12+i,1)] = x; });
+    });
+    return { grain:"month", ws:DEF_WS, artists:{ [group]:{ order:rows.map(r=>r[0]), vals } } };
   };
   if (k==="songs") return build("Laufey", [
     ["From the Start",31,[33,29,30,38,31,28]], ["Falling Behind",24,[26,22,25,29,24,21]],
@@ -245,7 +260,7 @@ function sampleFor(k){
 function isOldSample(k, st){
   const a = st && st.artists, keys = a && Object.keys(a);
   if (!keys || keys.length!==1) return false;
-  const g = a[keys[0]], o = JSON.stringify(g.order), big = lim => Object.values(g.years||{}).some(yr=>Object.values(yr).some(r=>(r||[]).some(v=>v>=lim)));
+  const g = a[keys[0]], o = JSON.stringify(g.order), big = lim => Object.values(g.vals||{}).some(m=>Object.values(m||{}).some(v=>v>=lim));
   if (k==="albums") return (keys[0]==="Sample Artist" && o==='["First Album","Second Album","Third Album"]') || (keys[0]==="Laufey" && big(1e6));
   if (k==="artists") return o==='["Artist One","Artist Two","Artist Three","Artist Four"]' || (o==='["Laufey","Taylor Swift","Sabrina Carpenter","Madison Beer"]' && big(1e7));
   return false;
@@ -257,14 +272,16 @@ function readStyle(st){
   if (has(FONTS, st.font)) style.font=st.font;
   if (st.custom && HEX6.test(st.custom.bg) && HEX6.test(st.custom.ink)) style.custom={bg:st.custom.bg, ink:st.custom.ink};
 }
-const usable = (k, d) => d && d.artists && Object.keys(d.artists).length && !isOldSample(k, d);
+// Older saves kept 12-month arrays per year; migrateSet turns those into the period-keyed form.
+const prep = d => { const m = P.migrateSet(d); return m && m.grain && P.GRAINS.some(g=>g[0]===m.grain) ? m : null; };
+const usable = (k, d) => d && Object.keys(d.artists).length && !isOldSample(k, d);
 function loadSaved(){
   KIND_IDS.forEach(k => { data[k] = sampleFor(k); });
   let saved = false;
   try{
     const s = JSON.parse(localStorage.getItem(LS_KEY));
     if (s && s.data){
-      KIND_IDS.forEach(k => { if (usable(k, s.data[k])) data[k] = s.data[k]; if (s.uis && s.uis[k]) Object.assign(uis[k], s.uis[k]); });
+      KIND_IDS.forEach(k => { const d = prep(s.data[k]); if (usable(k, d)) data[k] = d; if (s.uis && s.uis[k]) Object.assign(uis[k], s.uis[k]); });
       if (has(KINDS, s.kind)) kind = s.kind;
       readStyle(s.style); saved = true;
     }
@@ -272,27 +289,56 @@ function loadSaved(){
   if (!saved){
     // first visit since the two table tools were merged: pick up whatever they saved separately
     Object.keys(LEGACY).forEach(k => { try{
-      const s = JSON.parse(localStorage.getItem(LEGACY[k]));
-      if (s && usable(k, s.state)){ data[k] = s.state; if (s.ui) Object.assign(uis[k], s.ui); readStyle(s.style); }
+      const s = JSON.parse(localStorage.getItem(LEGACY[k])), d = prep(s && s.state);
+      if (usable(k, d)){ data[k] = d; if (s.ui) Object.assign(uis[k], s.ui); readStyle(s.style); }
     }catch(e){} });
   }
+  KIND_IDS.forEach(k => { if (!Array.isArray(uis[k].extra)) uis[k].extra = []; });
   const q = new URLSearchParams(location.search).get("kind");
   if (has(KINDS, q)) kind = q;
   state = data[kind]; ui = uis[kind];
 }
-function ensureSel(){
-  const names = Object.keys(state.artists);
-  if (!names.length){ const n = K().grouped ? "New Artist" : GROUP; state.artists[n] = { order:[], years:{} }; names.push(n); }
-  if (!state.artists[ui.artist]) ui.artist = names[0];
-  const art = state.artists[ui.artist];
-  if (!Object.keys(art.years).length) art.years[new Date().getFullYear()] = {};
-  const years = Object.keys(art.years).map(Number).sort((a,b)=>a-b);
-  if (!years.includes(Number(ui.year))) ui.year = years[years.length-1];
-  ui.year = Number(ui.year);
-}
 const getArt = () => state.artists[ui.artist];
-const getYear = () => (getArt().years[ui.year] ||= {});
-const getArr = name => (getYear()[name] ||= emptyArr());
+const keyOf = o => P.key(state.grain, o, state.ws);
+const slotOf = (art, name) => (has(art.vals, name) ? art.vals[name] : (art.vals[name] = {}));
+function getV(art, name, o){
+  if (!has(art.vals, name)) return null;
+  const v = art.vals[name][keyOf(o)]; return v==null ? null : v;
+}
+function setV(art, name, o, v){
+  if (v==null){ if (has(art.vals, name)) delete art.vals[name][keyOf(o)]; }
+  else slotOf(art, name)[keyOf(o)] = v;
+}
+function extent(art){
+  let lo = Infinity, hi = -Infinity;
+  art.order.forEach(n => { if (has(art.vals, n)) Object.keys(art.vals[n]).forEach(k => { const o = P.ordOfKey(state.grain, k, state.ws); if (o!=null){ if (o>hi) hi = o; if (o<lo) lo = o; } }); });
+  return hi===-Infinity ? { lo:P.latestOrd(state.grain, state.ws), hi:P.latestOrd(state.grain, state.ws), empty:true } : { lo, hi };
+}
+// Days, weeks and years show the latest stretch of data; with fewer periods than the default they don't pad the table with empty columns.
+function curWin(){
+  const e = extent(getArt()), g = state.grain;
+  const u = ui.n ? ui : Object.assign({}, ui, { n:e.empty ? P.DEFN[g] : Math.max(2, Math.min(P.DEFN[g], e.hi-e.lo+1)) });
+  return P.window(g, state.ws, u, e.hi);
+}
+function yearsList(){
+  const s = new Set(ui.extra || []), art = getArt();
+  art.order.forEach(n => { if (has(art.vals, n)) Object.keys(art.vals[n]).forEach(k => { const y = +String(k).slice(0,4); if (y) s.add(y); }); });
+  if (!s.size) s.add(new Date().getFullYear());
+  return [...s].sort((a,b)=>a-b);
+}
+function ensureSel(){
+  if (!P.GRAINS.some(g=>g[0]===state.grain)) state.grain = "month";
+  if (typeof state.ws !== "number") state.ws = DEF_WS;
+  const names = Object.keys(state.artists);
+  if (!names.length){ const n = K().grouped ? "New Artist" : GROUP; state.artists[n] = { order:[], vals:{} }; names.push(n); }
+  if (!state.artists[ui.artist]) ui.artist = names[0];
+  if (state.grain==="month"){
+    const ys = yearsList();
+    if (!ys.includes(Number(ui.year))) ui.year = ys[ys.length-1];
+    ui.year = Number(ui.year);
+  }
+}
+const hasAnyValues = () => Object.values(state.artists).some(a => P.hasValues(a.vals, a.order));
 
 function parseNum(v){
   const s = String(v ?? "").replace(/[,\s]/g,"");
@@ -301,17 +347,56 @@ function parseNum(v){
   return isFinite(n) && n>=0 ? n : null;
 }
 
-/* ---------------- parsing uploads ---------------- */
-function parseMonth(v){
-  if (v instanceof Date){ const d=new Date(v.getTime()+12*3600*1000); return {y:d.getFullYear(), m:d.getMonth()+1}; }
-  if (typeof v === "number"){ if (v>20000){ const d=new Date(Math.round((v-25569)*86400000)); return {y:d.getUTCFullYear(), m:d.getUTCMonth()+1}; } return null; }
-  if (typeof v === "string"){
-    const t=v.trim(), r=/^(\d{4})-(\d{1,2})/.exec(t);
-    if (r && +r[2]>=1 && +r[2]<=12) return {y:+r[1], m:+r[2]};
-    const d=new Date(t); if(!isNaN(d)) return {y:d.getFullYear(), m:d.getMonth()+1};
+/* ---------------- period (day / week / month / year) ---------------- */
+const unit = () => P.UNIT[state.grain], Unit = () => { const u = unit(); return u[0].toUpperCase()+u.slice(1); };
+const wsName = () => P.WEEKDAYS[state.ws];
+function fillGrain(){
+  const g = $("grain");
+  if (!g.options.length) g.innerHTML = P.GRAINS.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join("");
+  if (!$("ws").options.length) $("ws").innerHTML = P.WEEKDAYS.map((d,i)=>`<option value="${i}">${d}${i===5?" (Fri–Thu, like Billboard)":""}</option>`).join("");
+  g.value = state.grain; $("ws").value = String(state.ws);
+  $("wsLabel").hidden = state.grain!=="week";
+  $("yearRow").hidden = state.grain!=="month";
+  $("winRow").hidden = state.grain==="month";
+  if (state.grain!=="month"){
+    const W = curWin(), last = W.ords[W.ords.length-1];
+    $("winN").value = W.ords.length; $("winN").max = P.MAXN[state.grain];
+    $("winEnd").value = P.iso(P.endDay(state.grain, last, state.ws));
   }
-  return null;
 }
+// Finer data can be added up into coarser periods; going the other way means starting fresh.
+function changePeriod(g2, ws2){
+  const g1 = state.grain, ws1 = state.ws;
+  if (g1===g2 && ws1===ws2) return true;
+  const msg = $("grainMsg");
+  if (!hasAnyValues()){ state.grain = g2; state.ws = ws2; ui.n = ui.end = null; ui.year = null; msg.textContent = ""; return true; }
+  if (P.canConvert(g1, ws1, g2, ws2)){
+    const extra = g1==="week" ? " Weeks that straddle New Year count toward the year they start in." : "";
+    if (!confirm(`Change this ${K().many} table from ${P.ADJ[g1]} to ${P.ADJ[g2]}? The ${P.UNIT[g1]} numbers are added up into ${P.UNIT[g2]}s.${extra} You can't split them apart again, but you can re-import from Spotify.`)) return false;
+    Object.values(state.artists).forEach(a => { a.vals = P.rollVals(a.vals, g1, ws1, g2, ws2); });
+    state.grain = g2; state.ws = ws2; ui.n = ui.end = null; ui.year = null; msg.textContent = `Now ${P.ADJ[g2]}.`;
+    return true;
+  }
+  const why = g1===g2 ? "Weeks can't be moved to a different start day" : `${P.ADJ[g1][0].toUpperCase()+P.ADJ[g1].slice(1)} numbers can't be split into ${P.UNIT[g2]}s`;
+  if (!confirm(`${why}. Start a new, empty ${P.ADJ[g2]} table instead? This clears the numbers in the current ${K().many} table. (Re-importing from Spotify is the way to get ${P.UNIT[g2]}s from your history.)`)) return false;
+  Object.values(state.artists).forEach(a => { a.vals = {}; });
+  state.grain = g2; state.ws = ws2; ui.n = ui.end = null; ui.year = null; msg.textContent = `Started a new ${P.ADJ[g2]} table.`;
+  return true;
+}
+$("grain").addEventListener("change", ()=>{
+  const g = $("grain").value;
+  const ws = g==="week" ? Number($("ws").value) : state.ws;
+  if (changePeriod(g, ws)){ titleDirty = false; lastDaysKey = ""; refreshAll(); } else fillGrain();
+});
+$("ws").addEventListener("change", ()=>{
+  if (changePeriod("week", Number($("ws").value))){ titleDirty = false; lastDaysKey = ""; refreshAll(); } else fillGrain();
+});
+$("winN").addEventListener("change", ()=>{ ui.n = Math.max(2, Math.min(P.MAXN[state.grain], Math.round(+$("winN").value)||P.DEFN[state.grain])); lastDaysKey = ""; refreshAll(); });
+$("winEnd").addEventListener("change", ()=>{ ui.end = $("winEnd").value || null; lastDaysKey = ""; refreshAll(); });
+$("winLatest").addEventListener("click", ()=>{ ui.end = null; lastDaysKey = ""; refreshAll(); });
+const csvKey = k => state.grain==="month" ? k+"-01" : k;     // what goes in the Month/Date column of exports
+
+/* ---------------- parsing uploads ---------------- */
 function parseCSV(text){
   const rows=[]; let row=[], f="", q=false;
   for (let i=0;i<text.length;i++){
@@ -323,43 +408,58 @@ function parseCSV(text){
     else if (c!=='\r') f+=c;
   }
   if (f.length||row.length){ row.push(f); rows.push(row); }
-  const head = rows.shift()||[]; if(head.length) head[0]=String(head[0]).replace(/^\uFEFF/,"");
+  const head = rows.shift()||[]; if(head.length) head[0]=String(head[0]).replace(/^﻿/,"");
   return rows.filter(r=>r.some(x=>String(x).trim())).map(r=>{ const o={}; head.forEach((h,i)=>o[h]=r[i]); return o; });
 }
+const WHEN_COLS = ["month","week","week starting","day","date","period","year"];
 function objsToRows(objs, defArtist){
   const out=[];
   objs.forEach(o=>{
     const keys=Object.keys(o), low=keys.map(k=>String(k).trim().toLowerCase());
     const hasA = K().grouped && low.includes("artist");
     const get=(names,fb)=>{ for(const n of names){ const i=low.indexOf(n); if(i>=0) return o[keys[i]]; } return fb!==undefined ? o[keys[fb]] : undefined; };
-    const pm = parseMonth(get(["month","date"],0));
+    const pm = P.parseWhen(get(WHEN_COLS,0));
     const album = get(K().names, hasA?undefined:1);
     const rawS = get(["streams","plays","listens"], hasA?undefined:2);
     if (!pm || album==null || String(album).trim()==="" || rawS==null || String(rawS).trim()==="") return;
     const streams = Number(String(rawS).replace(/,/g,""));
     if (!isFinite(streams)) return;
     const artist = !K().grouped ? GROUP : (String(get(["artist"]) ?? "").trim() || defArtist);
-    out.push({ artist, y:pm.y, m:pm.m, album:String(album).trim(), streams });
+    out.push({ artist, day:pm.day, prec:pm.prec, album:String(album).trim(), streams });
   });
   return out;
 }
 const titleCase = s => s.replace(/\b\w/g, c=>c.toUpperCase());
 const cleanName = s => titleCase(String(s).split(" - ")[0].replace(/\.[^.]+$/,"").trim()) || "Artist";
 
-function applyRows(rows, replace){
-  if (replace) state.artists = {};
-  const seen = new Set();
-  rows.forEach(r=>{
-    const art = (state.artists[r.artist] ||= { order:[], years:{} });
-    if (!art.order.includes(r.album)) art.order.push(r.album);
-    const yr = (art.years[r.y] ||= {});
-    const arr = (yr[r.album] ||= emptyArr());
-    const key = [r.artist,r.y,r.m,r.album].join("|");
-    arr[r.m-1] = seen.has(key) && arr[r.m-1]!=null ? arr[r.m-1]+r.streams : r.streams;
-    seen.add(key);
+// Brings a set of new numbers { grain, ws, artists:{ name:{ order, vals } } } into the table. Returns an error message, or "" when it worked.
+function mergeIn(inc, replace){
+  let artists = inc.artists;
+  if (replace){ state.artists = {}; state.grain = inc.grain; state.ws = inc.ws; ui.n = ui.end = null; }
+  else if (!hasAnyValues()){ state.grain = inc.grain; state.ws = inc.ws; ui.n = ui.end = null; }
+  else if (inc.grain!==state.grain || (inc.grain==="week" && inc.ws!==state.ws)){
+    if (!P.canConvert(inc.grain, inc.ws, state.grain, state.ws))
+      return `That data is ${P.ADJ[inc.grain]} but this table is ${P.ADJ[state.grain]}, and it can't be split down. Tick "Replace existing data" to switch the table to ${P.ADJ[inc.grain]}.`;
+    artists = {};
+    Object.keys(inc.artists).forEach(a => { artists[a] = { order:inc.artists[a].order, vals:P.rollVals(inc.artists[a].vals, inc.grain, inc.ws, state.grain, state.ws) }; });
+  }
+  Object.keys(artists).forEach(a => {
+    const art = (state.artists[a] ||= { order:[], vals:{} });
+    artists[a].order.forEach(n => { if (!art.order.includes(n)) art.order.push(n); });
+    Object.keys(artists[a].vals).forEach(n => { Object.assign(slotOf(art, n), artists[a].vals[n]); });
   });
-  const first = rows[0].artist;
-  ui.artist = first; ui.year = null; titleDirty = false; lastDaysKey = "";
+  ui.artist = Object.keys(artists)[0]; ui.year = null; titleDirty = false; lastDaysKey = "";
+  return "";
+}
+function applyRows(rows, replace){
+  const { grain, ws } = P.inferGrain(rows), artists = {};
+  rows.forEach(r=>{
+    const art = (artists[r.artist] ||= { order:[], vals:{} });
+    if (!art.order.includes(r.album)) art.order.push(r.album);
+    const k = P.key(grain, P.ordOfDay(grain, r.day, ws), ws), m = slotOf(art, r.album);
+    m[k] = (m[k]||0) + r.streams;
+  });
+  return { err: mergeIn({ grain, ws, artists }, replace), grain, ws };
 }
 
 $("file").addEventListener("change", e=>{
@@ -380,9 +480,11 @@ $("file").addEventListener("change", e=>{
         });
       }
       if (!rows.length) throw new Error("no rows");
-      applyRows(rows, $("replace").checked);
+      const res = applyRows(rows, $("replace").checked);
+      if (res.err){ msg.textContent = res.err; e.target.value = ""; return; }
       const arts = [...new Set(rows.map(r=>K().grouped ? r.artist : r.album))];
-      msg.textContent = `Loaded ${rows.length} rows from ${f.name}: ${arts.slice(0,8).join(", ")}${arts.length>8?", …":""}.`;
+      msg.textContent = `Loaded ${rows.length} rows from ${f.name} as ${P.ADJ[res.grain]} data: ${arts.slice(0,8).join(", ")}${arts.length>8?", …":""}.`;
+      $("grainMsg").textContent = "";
       refreshAll();
     }catch(err){
       msg.textContent = "Couldn't read that file. " + K().cols.replace(/^Columns needed/, "It needs columns named").replace(/ Each .*$/, "");
@@ -394,11 +496,10 @@ $("file").addEventListener("change", e=>{
 
 /* ---------------- artists / years / albums ---------------- */
 function fillSelectors(){
-  ensureSel();
+  ensureSel(); fillGrain();
   $("artist").innerHTML = Object.keys(state.artists).map(n=>`<option ${n===ui.artist?"selected":""}>${esc(n)}</option>`).join("");
   $("artistName").value = ui.artist;
-  const years = Object.keys(getArt().years).map(Number).sort((a,b)=>a-b);
-  $("year").innerHTML = years.map(y=>`<option ${y===ui.year?"selected":""}>${y}</option>`).join("");
+  $("year").innerHTML = yearsList().map(y=>`<option ${y===ui.year?"selected":""}>${y}</option>`).join("");
 }
 $("artist").addEventListener("change", ()=>{ ui.artist=$("artist").value; ui.year=null; titleDirty=false; refreshAll(); });
 $("year").addEventListener("change", ()=>{ ui.year=Number($("year").value); refreshAll(); });
@@ -410,7 +511,7 @@ $("artistName").addEventListener("change", ()=>{
 });
 $("addArtist").addEventListener("click", ()=>{
   let n="New Artist", i=2; while(state.artists[n]) n="New Artist "+(i++);
-  state.artists[n]={order:[],years:{}}; ui.artist=n; ui.year=null; titleDirty=false; refreshAll();
+  state.artists[n]={order:[],vals:{}}; ui.artist=n; ui.year=null; titleDirty=false; refreshAll();
 });
 $("delArtist").addEventListener("click", ()=>{
   delete state.artists[ui.artist]; ui.artist=null; ui.year=null; refreshAll();
@@ -418,7 +519,8 @@ $("delArtist").addEventListener("click", ()=>{
 $("addYear").addEventListener("click", ()=>{
   const y=Number($("newYear").value);
   if (!(y>=1990 && y<=2100)) { $("dataMsg").textContent="Enter a year like 2025."; return; }
-  getArt().years[y] ||= {}; ui.year=y; $("newYear").value=""; $("dataMsg").textContent=""; refreshAll();
+  if (!ui.extra.includes(y)) ui.extra.push(y);
+  ui.year=y; $("newYear").value=""; $("dataMsg").textContent=""; refreshAll();
 });
 $("addAlbum").addEventListener("click", addAlbum);
 $("newAlbum").addEventListener("keydown", e=>{ if(e.key==="Enter") addAlbum(); });
@@ -426,48 +528,37 @@ function addAlbum(){
   const n=$("newAlbum").value.trim(); if(!n) return;
   const art=getArt();
   if (art.order.includes(n)){ $("dataMsg").textContent="That "+K().one+" is already listed."; return; }
-  art.order.push(n); getArr(n); $("newAlbum").value=""; $("dataMsg").textContent=""; refreshAll();
+  art.order.push(n); slotOf(art, n); $("newAlbum").value=""; $("dataMsg").textContent=""; refreshAll();
 }
 $("spBtn").addEventListener("click", ()=>{
-  SpotifyImport.open({ mode:"table", kind, onImport:(res, msg)=>{
-    if ($("replace").checked) state.artists = res; else Object.assign(state.artists, res);
-    ui.artist = Object.keys(res)[0]; ui.year = null; titleDirty = false; lastDaysKey = "";
-    $("loadMsg").textContent = msg; refreshAll();
+  SpotifyImport.open({ mode:"table", kind, grain:state.grain, ws:state.ws, onImport:(res, msg)=>{
+    const err = mergeIn(res, $("replace").checked);
+    $("loadMsg").textContent = err || msg; $("grainMsg").textContent = ""; refreshAll();
   }});
 });
 $("clearAll").addEventListener("click", ()=>{
-  state.artists = {}; ui.artist = null; ui.year = null; titleDirty=false; lastDaysKey="";
+  state.artists = {}; ui.artist = null; ui.year = null; ui.n = ui.end = null; titleDirty=false; lastDaysKey="";
   $("dataMsg").textContent="Cleared."; refreshAll();
 });
 
 /* ---------------- grid editor ---------------- */
 function renderGrid(){
-  const art=getArt(), yr=getYear();
+  const art=getArt(), g=state.grain, ws=state.ws, W=curWin();
   if (!art.order.length){ $("grid").innerHTML='<div class="msg" style="padding:12px">No '+K().many+' yet. Add one below or upload a sheet.</div>'; return; }
-  let h='<table class="grid"><thead><tr><th class="sticky">'+K().One+'</th><th class="prevh">Dec '+(ui.year-1)+'</th>'+MONTHS.map(m=>`<th>${m}</th>`).join("")+'</tr></thead><tbody>';
+  const hd = (o, prev) => `<th${prev?' class="prevh"':""} title="${esc(P.label(g,o,ws,false))}">${esc(g==="month" ? P.label(g,o,ws,!prev) : P.label(g,o,ws,true))}</th>`;
+  let h='<table class="grid"><thead><tr><th class="sticky">'+K().One+'</th>'+hd(W.prev,true)+W.ords.map(o=>hd(o,false)).join("")+'</tr></thead><tbody>';
   art.order.forEach((name,i)=>{
-    const arr=yr[name]||emptyArr();
     h+=`<tr><td class="sticky"><input class="aname" data-i="${i}" value="${esc(name)}">
       <div class="ctl"><button class="alt small" data-act="up" data-i="${i}">▲</button><button class="alt small" data-act="down" data-i="${i}">▼</button><button class="danger small" data-act="del" data-i="${i}">Remove</button></div></td>`;
-    const pa=(art.years[ui.year-1]||{})[name], pv=pa?pa[11]:null;
-    h+=`<td><input class="cell prev" inputmode="decimal" data-i="${i}" data-m="-1" value="${pv==null?"":pv}"></td>`;
-    for(let m=0;m<12;m++) h+=`<td><input class="cell" inputmode="decimal" data-i="${i}" data-m="${m}" value="${arr[m]==null?"":arr[m]}"></td>`;
+    W.all.forEach((o,c)=>{ const v=getV(art,name,o); h+=`<td><input class="cell${c===0?" prev":""}" inputmode="decimal" data-i="${i}" data-o="${o}" value="${v==null?"":v}"></td>`; });
     h+="</tr>";
   });
   $("grid").innerHTML=h+"</tbody></table>";
 }
-function setCell(i,m,v){
-  const art=getArt(), name=art.order[i];
-  if (m===-1){
-    if (v==null && !art.years[ui.year-1]) return;
-    const yr=(art.years[ui.year-1] ||= {});
-    (yr[name] ||= emptyArr())[11]=v;
-  } else getArr(name)[m]=v;
-}
 const gridEl=$("grid");
 gridEl.addEventListener("input", e=>{
   const t=e.target; if(!t.classList.contains("cell")) return;
-  setCell(+t.dataset.i,+t.dataset.m,parseNum(t.value));
+  const art=getArt(); setV(art, art.order[+t.dataset.i], +t.dataset.o, parseNum(t.value));
   fillSelectors(); persist(); renderChart();
 });
 gridEl.addEventListener("change", e=>{
@@ -475,7 +566,7 @@ gridEl.addEventListener("change", e=>{
   const art=getArt(), i=+t.dataset.i, old=art.order[i], nn=t.value.trim();
   if(!nn || (nn!==old && art.order.includes(nn))){ t.value=old; return; }
   art.order[i]=nn;
-  Object.values(art.years).forEach(yr=>{ if(yr[old]){ yr[nn]=yr[old]; if(nn!==old) delete yr[old]; } });
+  if (nn!==old && has(art.vals, old)){ art.vals[nn]=art.vals[old]; delete art.vals[old]; }
   refreshAll();
 });
 gridEl.addEventListener("click", e=>{
@@ -483,7 +574,7 @@ gridEl.addEventListener("click", e=>{
   const art=getArt(), i=+b.dataset.i, act=b.dataset.act;
   if (act==="up" && i>0) [art.order[i-1],art.order[i]]=[art.order[i],art.order[i-1]];
   else if (act==="down" && i<art.order.length-1) [art.order[i+1],art.order[i]]=[art.order[i],art.order[i+1]];
-  else if (act==="del"){ const n=art.order[i]; art.order.splice(i,1); Object.values(art.years).forEach(yr=>delete yr[n]); }
+  else if (act==="del"){ const n=art.order[i]; art.order.splice(i,1); if (has(art.vals,n)) delete art.vals[n]; }
   refreshAll();
 });
 gridEl.addEventListener("paste", e=>{
@@ -491,27 +582,21 @@ gridEl.addEventListener("paste", e=>{
   const text=(e.clipboardData||window.clipboardData).getData("text").replace(/\r/g,"").replace(/\n+$/,"");
   if(!/[\t\n]/.test(text)) return;
   e.preventDefault();
-  const art=getArt(), i0=+t.dataset.i, m0=+t.dataset.m;
+  const art=getArt(), W=curWin(), i0=+t.dataset.i, c0=W.all.indexOf(+t.dataset.o);
   text.split("\n").forEach((line,r)=>{
     const name=art.order[i0+r]; if(!name) return;
-    line.split("\t").forEach((v,c)=>{ const m=m0+c; if(m<=11) setCell(i0+r,m,parseNum(v)); });
+    line.split("\t").forEach((v,c)=>{ const o=W.all[c0+c]; if(o!=null) setV(art,name,o,parseNum(v)); });
   });
   fillSelectors(); persist(); renderGrid(); renderChart();
 });
 
 /* ---------------- export ---------------- */
 function longRows(){
-  const grouped=K().grouped, rows=[grouped?["Artist","Month",K().One,"Streams"]:["Month","Artist","Streams"]];
+  const grouped=K().grouped, head=P.CSVHEAD[state.grain], rows=[grouped?["Artist",head,K().One,"Streams"]:[head,"Artist","Streams"]];
   Object.keys(state.artists).forEach(a=>{
-    const art=state.artists[a];
-    Object.keys(art.years).map(Number).sort((x,y)=>x-y).forEach(y=>{
-      for(let m=0;m<12;m++) art.order.forEach(al=>{
-        const v=art.years[y][al]?.[m];
-        if (v==null) return;
-        const mo=`${y}-${String(m+1).padStart(2,"0")}-01`;
-        rows.push(grouped ? [a,mo,al,v] : [mo,al,v]);
-      });
-    });
+    const art=state.artists[a], items=[];
+    art.order.forEach((al,idx)=>{ if (has(art.vals,al)) Object.keys(art.vals[al]).forEach(k=>{ const v=art.vals[al][k]; if (v!=null) items.push([k,idx,al,v]); }); });
+    items.sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:x[1]-y[1]).forEach(([k,,al,v])=>rows.push(grouped?[a,csvKey(k),al,v]:[csvKey(k),al,v]));
   });
   return rows;
 }
@@ -541,11 +626,12 @@ $("copyCsv").addEventListener("click", async ()=>{
   }
 });
 $("tpl").addEventListener("click", ()=>{
-  const t = {
-    albums:"Artist,Month,Album,Streams\nMy Artist,2026-01-01,First Album,310\nMy Artist,2026-01-01,Second Album,150\nMy Artist,2026-02-01,First Album,280\nMy Artist,2026-02-01,Second Album,190\n",
-    songs:"Artist,Month,Song,Streams\nMy Artist,2026-01-01,First Song,310\nMy Artist,2026-01-01,Second Song,150\nMy Artist,2026-02-01,First Song,280\nMy Artist,2026-02-01,Second Song,190\n",
-    artists:"Month,Artist,Streams\n2026-01-01,Artist One,9200\n2026-01-01,Artist Two,5100\n2026-02-01,Artist One,9800\n2026-02-01,Artist Two,4700\n"
-  }[kind];
+  const g = state.grain, head = P.CSVHEAD[g];
+  const dates = { day:["2026-01-01","2026-01-02"], week:["2026-01-02","2026-01-09"], month:["2026-01-01","2026-02-01"], year:["2025","2026"] }[g];
+  const nums = [[310,150],[280,190]];
+  const t = K().grouped
+    ? `Artist,${head},${K().One},Streams\n` + dates.map((d,i)=>`My Artist,${d},First ${K().One},${nums[i][0]}\nMy Artist,${d},Second ${K().One},${nums[i][1]}`).join("\n") + "\n"
+    : `${head},Artist,Streams\n` + dates.map((d,i)=>`${d},Artist One,${nums[i][0]*30}\n${d},Artist Two,${nums[i][1]*30}`).join("\n") + "\n";
   saveBlob(new Blob([t],{type:"text/csv"}),kind+"-streams-template.csv");
 });
 
@@ -597,41 +683,48 @@ function showImg(W){ const img=$("img"); img.src=canvas.toDataURL("image/png"); 
 
 function renderChart(){
   const th=theme(), F=FONTS[has(FONTS, style.font) ? style.font : "serif"].stack;
-  const art=getArt(), y=ui.year, yr=art.years[y]||{};
+  const art=getArt(), g=state.grain, ws=state.ws, W=curWin(), ords=W.ords;
   const metric=$("metric").value, isAvg=metric==="avg", showPct=$("showPct").checked;
+  const u=unit(), adj=P.ADJ[g];
 
-  let maxMonth=0;
-  art.order.forEach(n=>{ (yr[n]||[]).forEach((v,i)=>{ if(v!=null && i+1>maxMonth) maxMonth=i+1; }); });
+  let maxIdx=0;
+  art.order.forEach(n=>{ ords.forEach((o,i)=>{ if (getV(art,n,o)!=null && i+1>maxIdx) maxIdx=i+1; }); });
 
-  const auto = K().grouped ? `${ui.artist}: ${isAvg?"Average Streams per Day":"Streams per Month"}, ${y}` : `${isAvg?"Average Streams per Day":"Streams per Month"} by Artist, ${y}`;
-  if (!titleDirty) $("title").value = auto;
+  const metricName = isAvg ? "Average Streams per Day" : "Streams per "+Unit();
+  const spanFor = nCols => g==="month" ? String(ui.year) : P.spanLabel(g, ords[0], ords[Math.max(1,nCols)-1], ws);
+  const autoFor = nCols => K().grouped ? `${ui.artist}: ${metricName}, ${spanFor(nCols)}` : `${metricName} by Artist, ${spanFor(nCols)}`;
 
-  if (!art.order.length || !maxMonth){
+  if (!art.order.length || !maxIdx){
+    if (!titleDirty) $("title").value = autoFor(ords.length);
     sizeCanvas(720,170,th); ctx.fillStyle=th.MUTED; ctx.font=`italic 19px ${F}`; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
     ctx.fillText("No data yet. Upload a sheet or add "+K().many+" and streams above.", 48, 92);
     showImg(720); return;
   }
 
-  const key=`${ui.artist}|${y}|${maxMonth}`;
+  const lastOrd=ords[maxIdx-1], lastLen=P.len(g,lastOrd,ws);
+  const key=`${ui.artist}|${g}|${ws}|${lastOrd}`;
   if (key!==lastDaysKey){
-    const now=new Date();
-    $("lastDays").value = (now.getFullYear()===y && now.getMonth()+1===maxMonth) ? now.getDate() : daysIn(y,maxMonth);
+    const sd=P.startDay(g,lastOrd,ws), ed=P.endDay(g,lastOrd,ws), t=P.todayDay();
+    $("lastDays").value = (sd<=t && t<=ed) ? t-sd+1 : lastLen;
     lastDaysKey=key;
   }
+  $("lastDays").max=lastLen;
 
-  const nMonths=Math.max(1, $("showLast").checked ? maxMonth : maxMonth-1);
-  const days=[]; for(let m=1;m<=12;m++) days.push(daysIn(y,m));
-  const lastDays=Math.min(31,Math.max(1,+$("lastDays").value||days[maxMonth-1]));
-  if (nMonths===maxMonth) days[maxMonth-1]=Math.min(lastDays, days[maxMonth-1]);
-  const partial = nMonths===maxMonth && days[maxMonth-1] < daysIn(y,maxMonth);
-  const totalDays=days.slice(0,nMonths).reduce((a,b)=>a+b,0);
+  const nCols=Math.max(1, $("showLast").checked ? maxIdx : maxIdx-1);
+  if (!titleDirty) $("title").value = autoFor(nCols);
+  const days=ords.map(o=>P.len(g,o,ws));
+  const lastDays=Math.min(lastLen,Math.max(1,+$("lastDays").value||lastLen));
+  if (nCols===maxIdx) days[maxIdx-1]=Math.min(lastDays, days[maxIdx-1]);
+  const partial = nCols===maxIdx && days[maxIdx-1] < lastLen;
+  const totalDays=days.slice(0,nCols).reduce((a,b)=>a+b,0);
+  const prevLen=P.len(g,W.prev,ws);
 
   let rows=art.order.map(name=>{
-    const raw=(yr[name]||emptyArr()).slice(0,nMonths).map(v=>v||0);
+    const raw=ords.slice(0,nCols).map(o=>getV(art,name,o)||0);
     const total=raw.reduce((a,b)=>a+b,0);
-    const pd=((art.years[y-1]||{})[name]||[])[11];
-    const prevDec = pd==null ? null : (isAvg ? pd/31 : pd);
-    return { name, vals: isAvg ? raw.map((v,i)=>v/days[i]) : raw, total, prevDec, yearVal: isAvg ? total/totalDays : total };
+    const pd=getV(art,name,W.prev);
+    const prevVal = pd==null ? null : (isAvg ? pd/prevLen : pd);
+    return { name, vals: isAvg ? raw.map((v,i)=>v/days[i]) : raw, total, prevVal, sumVal: isAvg ? total/totalDays : total };
   });
   const sort=$("sort").value;
   if (sort==="total") rows.sort((a,b)=>b.total-a.total);
@@ -642,30 +735,31 @@ function renderChart(){
   const widest=Math.max(...rows.map(r=>mctx.measureText(r.name).width), 50);
   const labelW=Math.min(300,Math.max(130,Math.ceil(widest)+34)), colW=92, avgW=108, rowH=showPct?58:44;
   const padX=52, headTop=40, titleH=96, colHeadH=44, footH=60;
-  const W=Math.max(720, padX*2+labelW+colW*nMonths+avgW);
+  const W2=Math.max(720, padX*2+labelW+colW*nCols+avgW);
   const H=headTop+titleH+colHeadH+rowH*rows.length+footH;
-  sizeCanvas(W,H,th);
+  sizeCanvas(W2,H,th);
 
   ctx.textBaseline="alphabetic"; ctx.textAlign="left";
   let tsize=36; ctx.font=`700 ${tsize}px ${F}`;
   const title=$("title").value;
-  while (tsize>22 && ctx.measureText(title).width>W-padX*2){ tsize-=2; ctx.font=`700 ${tsize}px ${F}`; }
+  while (tsize>22 && ctx.measureText(title).width>W2-padX*2){ tsize-=2; ctx.font=`700 ${tsize}px ${F}`; }
   ctx.fillStyle=th.INK; ctx.fillText(title, padX, headTop+34);
   ctx.font=`italic 20px ${F}`; ctx.fillStyle=th.MUTED;
-  const subtitle=(isAvg?"Daily average per month":"Total streams per month")+(showPct?", with % change from the month before":"");
+  const base = g==="day" ? "Streams per day" : (isAvg ? "Daily average per "+u : "Total streams per "+u);
+  const subtitle=base+(showPct?", with % change from the "+u+" before":"");
   ctx.fillText(subtitle, padX, headTop+68);
   if (showPct){
     ctx.font=`italic 17px ${F}`; ctx.textBaseline="middle";
     const w2=ctx.measureText("decrease").width, w1=ctx.measureText("increase").width, ly=headTop+62;
-    let x=W-padX-(w2+22); ctx.fillStyle=th.NEG; ctx.beginPath(); ctx.arc(x+6,ly,6,0,Math.PI*2); ctx.fill(); ctx.fillStyle=th.MUTED; ctx.fillText("decrease",x+20,ly+1);
+    let x=W2-padX-(w2+22); ctx.fillStyle=th.NEG; ctx.beginPath(); ctx.arc(x+6,ly,6,0,Math.PI*2); ctx.fill(); ctx.fillStyle=th.MUTED; ctx.fillText("decrease",x+20,ly+1);
     x-=w1+22+22; ctx.fillStyle=th.POS; ctx.beginPath(); ctx.arc(x+6,ly,6,0,Math.PI*2); ctx.fill(); ctx.fillStyle=th.MUTED; ctx.fillText("increase",x+20,ly+1);
     ctx.textBaseline="alphabetic";
   }
 
-  const y0=headTop+titleH, tableW=labelW+colW*nMonths+avgW;
+  const y0=headTop+titleH, tableW=labelW+colW*nCols+avgW;
   ctx.fillStyle=th.INK; ctx.font=`700 16px ${F}`; ctx.textAlign="center";
-  for(let m=0;m<nMonths;m++) ctx.fillText(MONTHS[m]+(partial&&m===nMonths-1?"*":""), padX+labelW+colW*m+colW/2, y0+26);
-  ctx.fillText(isAvg?"Year avg":"Year total", padX+labelW+colW*nMonths+avgW/2, y0+26);
+  for(let m=0;m<nCols;m++) ctx.fillText(P.label(g,ords[m],ws,true)+(partial&&m===nCols-1?"*":""), padX+labelW+colW*m+colW/2, y0+26);
+  ctx.fillText(g==="month" ? (isAvg?"Year avg":"Year total") : (isAvg?"Average":"Total"), padX+labelW+colW*nCols+avgW/2, y0+26);
   ctx.textAlign="left"; ctx.fillText(K().One, padX, y0+26);
   ctx.fillStyle=rgba(th.INK,0.4); ctx.fillRect(padX, y0+colHeadH-4, tableW, 1.5);
 
@@ -675,10 +769,10 @@ function renderChart(){
     ctx.fillStyle=th.INK; ctx.font=`700 18px ${F}`; ctx.textAlign="left"; ctx.textBaseline="middle";
     let nm=r.name; if (ctx.measureText(nm).width>labelW-14){ while (nm.length>1 && ctx.measureText(nm+"…").width>labelW-14) nm=nm.slice(0,-1).trimEnd(); nm+="…"; }
     ctx.fillText(nm,padX,yy+rowH/2);
-    for(let m=0;m<nMonths;m++){
+    for(let m=0;m<nCols;m++){
       const cx=padX+labelW+colW*m, cur=r.vals[m];
       let txt=null, kind=null, mag=0;
-      const prev = m>0 ? r.vals[m-1] : r.prevDec;
+      const prev = m>0 ? r.vals[m-1] : r.prevVal;
       if (m>0 || prev!=null){
         if (prev>0){
           const p=(cur-prev)/prev*100;
@@ -697,19 +791,21 @@ function renderChart(){
         ctx.fillText(txt, mid, yy+rowH/2+13);
       }
     }
-    const ax=padX+labelW+colW*nMonths;
+    const ax=padX+labelW+colW*nCols;
     ctx.fillStyle=rgba(th.INK,0.07); rr(ax+4,yy+5,avgW-8,rowH-10,10); ctx.fill();
     ctx.fillStyle=th.INK; ctx.textAlign="center"; ctx.font=`700 19px ${F}`;
-    ctx.fillText(fmtVal(r.yearVal,isAvg?2:0), ax+avgW/2, yy+rowH/2);
+    ctx.fillText(fmtVal(r.sumVal,isAvg?2:0), ax+avgW/2, yy+rowH/2);
   });
 
   ctx.textAlign="left"; ctx.textBaseline="alphabetic"; ctx.fillStyle=th.MUTED; ctx.font=`italic 16px ${F}`;
-  const hasPrev = rows.some(r=>r.prevDec!=null);
-  const note = (hasPrev?`Jan change is vs. Dec ${y-1}. `:"") + (partial?`*${MONTHS[nMonths-1]} is partial (${days[nMonths-1]} days). `:"") +
-    (isAvg ? "% change compares daily averages, so month length doesn't skew it." : "% change compares monthly totals.");
-  let nt=note; while (nt.length>8 && ctx.measureText(nt).width>W-padX*2) nt=nt.slice(0,-2);
+  const hasPrev = rows.some(r=>r.prevVal!=null);
+  const note = (g==="week" ? `Weeks run ${wsName()} to ${P.WEEKDAYS[(ws+6)%7]}. ` : "") +
+    (hasPrev ? `${g==="month" && ords[0]%12===0 ? "Jan" : P.label(g,ords[0],ws,true)} change is vs. ${P.label(g,W.prev,ws,false)}. ` : "") +
+    (partial ? `*${P.label(g,lastOrd,ws,true)} is partial (${days[maxIdx-1]} days). ` : "") +
+    (isAvg ? (g==="month"||g==="year" ? `% change compares daily averages, so ${u} length doesn't skew it.` : "% change compares daily averages.") : `% change compares ${adj} totals.`);
+  let nt=note; while (nt.length>8 && ctx.measureText(nt).width>W2-padX*2) nt=nt.slice(0,-2);
   ctx.fillText(nt===note?note:nt.trimEnd()+"…", padX, H-34);
-  showImg(W);
+  showImg(W2);
 }
 
 /* ---------------- style chips ---------------- */
@@ -748,7 +844,12 @@ function paintChips(){
 ["cBg","cInk"].forEach(id=>$(id).addEventListener("input",()=>{ style.custom={bg:$("cBg").value, ink:$("cInk").value}; persist(); paintChips(); renderChart(); }));
 
 /* ---------------- save PNG ---------------- */
-const fileBase = () => K().grouped ? `${slug(ui.artist)}-${slug(K().many)}-${ui.year}` : `artists-${ui.year}`;
+function periodTag(){
+  const g = state.grain; if (g==="month") return String(ui.year);
+  const W = curWin(), a = W.ords[0], b = W.ords[W.ords.length-1];
+  return g==="year" ? `${a}-to-${b}` : `${P.key(g,a,state.ws)}-to-${P.iso(P.endDay(g,b,state.ws))}`;
+}
+const fileBase = () => K().grouped ? `${slug(ui.artist)}-${slug(K().many)}-${periodTag()}` : `artists-${periodTag()}`;
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "streams";
 $("dl").addEventListener("click", ()=>{
   canvas.toBlob(b=>saveBlob(b, `${fileBase()}-streams.png`), "image/png");
@@ -764,6 +865,17 @@ $("share").addEventListener("click", ()=>{
 
 /* ---------------- wiring ---------------- */
 const kindRefs = [];
+function applyGrainText(){
+  const g = state.grain, u = unit(), adj = P.ADJ[g], n = curWin().ords.length;
+  $("entryTitle").textContent = `2. Enter / edit streams (${adj} totals)`;
+  $("entryHint").textContent = g==="month"
+    ? "Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in \"Entry order\"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there."
+    : `Enter total streams per ${u}. The grid shows ${n} ${u}s; change "Columns" or "Ending" in step 1 to move it. The shaded first column is the ${u} before, used only for the first % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼. You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.`;
+  $("metric").options[1].textContent = adj[0].toUpperCase()+adj.slice(1)+" total";
+  $("showLastTxt").textContent = "Include last "+u;
+  $("lastDaysTxt").textContent = "Days in last "+u;
+  $("lastDaysL").hidden = g==="day";
+}
 function applyKindText(){
   const k = K();
   $("newAlbum").placeholder = "New " + k.one + " name";
@@ -781,11 +893,11 @@ function buildKindChips(){
 }
 function setKind(k){
   kind = k; state = data[k]; ui = uis[k]; titleDirty = false; lastDaysKey = "";
-  $("dataMsg").textContent = ""; $("newAlbum").value = ""; $("loadMsg").textContent = KINDS[k].cols;
+  $("dataMsg").textContent = ""; $("grainMsg").textContent = ""; $("newAlbum").value = ""; $("loadMsg").textContent = KINDS[k].cols;
   try{ const u = new URL(location.href); u.searchParams.set("kind", k); history.replaceState(null, "", u); }catch(e){}
   refreshAll();
 }
-function refreshAll(){ applyKindText(); fillSelectors(); renderGrid(); persist(); renderChart(); }
+function refreshAll(){ applyKindText(); fillSelectors(); applyGrainText(); renderGrid(); persist(); renderChart(); }
 $("title").addEventListener("input", ()=>{ titleDirty=true; renderChart(); });
 $("autoTitle").addEventListener("click", ()=>{ titleDirty=false; renderChart(); });
 ["metric","showPct","showLast","lastDays","sort"].forEach(id=>{

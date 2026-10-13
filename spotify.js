@@ -3,8 +3,9 @@
    chart maker. Everything happens in the browser: the files you choose
    are read here and are never uploaded anywhere.
 
-   SpotifyImport.open({ mode:"table", kind:"albums"|"songs"|"artists", onImport(result, summary) })
-   SpotifyImport.open({ mode:"chart", onImport(result, summary) })
+   SpotifyImport.open({ mode:"table", kind:"albums"|"songs"|"artists", grain, ws, onImport(result, summary) })
+       result is { grain, ws, artists:{ name:{ order, vals } } }; needs periods.js
+   SpotifyImport.open({ mode:"chart", weekStart, onImport(result, summary, { weekStart }) })
    ------------------------------------------------------------------ */
 (function () {
   var SP = window.SpotifyImport = {};
@@ -127,21 +128,28 @@
   function topN(counts, n) {   // Map -> keys by count, most first
     return Array.from(counts.entries()).sort(function (a, b) { return b[1] - a[1]; }).slice(0, n).map(function (e) { return e[0]; });
   }
-  // Monthly play counts shaped for the Streams table maker.
+  // Play counts per period (day, week, month or year) shaped for the Streams table maker.
   function tableAgg(o) {
-    var L = localizer(o.tz), N = DB.n, minMs = o.minSec * 1000, mi = new Int32Array(N).fill(-1), maxM = -1, i;
+    var P = window.Periods, g = o.grain || "month", ws = o.ws == null ? 1 : o.ws;
+    var L = localizer(o.tz), N = DB.n, minMs = o.minSec * 1000, NONE = 2147483647, i;
+    var moA = new Int32Array(N).fill(NONE), ordA = new Int32Array(N).fill(NONE);
+    var moCache = new Map(), ordCache = new Map(), maxM = -1, maxO = -Infinity;
     for (i = 0; i < N; i++) {
       if (DB.ms[i] < minMs) continue;
-      var d = new Date(L(DB.ts[i])), m = d.getUTCFullYear() * 12 + d.getUTCMonth();
-      mi[i] = m; if (m > maxM) maxM = m;
+      var day = Math.floor(L(DB.ts[i]) / 86400000), m = moCache.get(day), od;
+      if (m === undefined) { var c = P.civil(day); m = c[0] * 12 + c[1] - 1; moCache.set(day, m); od = P.ordOfDay(g, day, ws); ordCache.set(day, od); }
+      else od = ordCache.get(day);
+      moA[i] = m; ordA[i] = od; if (m > maxM) maxM = m; if (od > maxO) maxO = od;
     }
+    // days and weeks keep only the most recent stretch; months and years keep everything
+    var minO = (g === "day" || g === "week") && o.back > 0 ? maxO - o.back + 1 : -Infinity;
     var inRange = function (m) { return o.range === "all" ? true : o.range === "last12" ? m > maxM - 12 : (m >= +o.range * 12 && m < +o.range * 12 + 12); };
     var kind = o.kind, S = DB.strs, plays = 0;
     var groupOf = function (i) { return kind === "artists" ? 0 : DB.ar[i]; };
     var itemOf = function (i) { return kind === "artists" ? DB.ar[i] : kind === "albums" ? DB.al[i] : DB.tr[i]; };
-    var perArtist = new Map(), perItem = new Map();     // plays in range
+    var perArtist = new Map(), perItem = new Map();     // plays in the chosen range, used to rank
     for (i = 0; i < N; i++) {
-      if (mi[i] < 0 || !inRange(mi[i])) continue;
+      if (moA[i] === NONE || !inRange(moA[i])) continue;
       perArtist.set(DB.ar[i], (perArtist.get(DB.ar[i]) || 0) + 1);
       var it = itemOf(i); if (it < 0) continue;
       var k = groupOf(i) * 4194304 + it; perItem.set(k, (perItem.get(k) || 0) + 1);
@@ -159,27 +167,28 @@
       });
     }
     if (!groups.some(function (g) { return g.items.length; })) throw new Error(kind === "albums" ? "No album names found in that range." : "No plays found in that range.");
-    var want2 = new Map();   // group*4194304+item -> {g, item, byYear}
-    groups.forEach(function (g) { g.items.forEach(function (it) { want2.set(g.gi * 4194304 + it, { g: g, it: it, y: {} }); }); });
+    var want2 = new Map();   // group*4194304+item -> { c: { periodNumber: plays } }
+    groups.forEach(function (gr) { gr.items.forEach(function (it) { want2.set(gr.gi * 4194304 + it, { c: {} }); }); });
     for (i = 0; i < N; i++) {
-      if (mi[i] < 0) continue;
+      if (ordA[i] === NONE || ordA[i] < minO) continue;
       var it2 = itemOf(i); if (it2 < 0) continue;
       var rec = want2.get(groupOf(i) * 4194304 + it2); if (!rec) continue;
-      var y = Math.floor(mi[i] / 12), mo = mi[i] % 12;
-      (rec.y[y] || (rec.y[y] = Array(12).fill(0)))[mo]++; plays++;
+      rec.c[ordA[i]] = (rec.c[ordA[i]] || 0) + 1; plays++;
     }
     var out = {};
-    groups.forEach(function (g) {
-      var order = g.items.map(function (it) { return S[it]; }), years = {};
-      g.items.forEach(function (it) {
-        var rec = want2.get(g.gi * 4194304 + it);
-        Object.keys(rec.y).forEach(function (y) { (years[y] || (years[y] = {}))[S[it]] = rec.y[y].map(function (v) { return v || null; }); });
+    groups.forEach(function (gr) {
+      var vals = {};
+      gr.items.forEach(function (it) {
+        var rec = want2.get(gr.gi * 4194304 + it), m = {};
+        Object.keys(rec.c).forEach(function (od) { m[P.key(g, +od, ws)] = rec.c[od]; });
+        vals[S[it]] = m;
       });
-      out[g.name] = { order: order, years: years };
+      out[gr.name] = { order: gr.items.map(function (it) { return S[it]; }), vals: vals };
     });
-    var names = groups.map(function (g) { return g.name; }), count = groups.reduce(function (a, g) { return a + g.items.length; }, 0);
+    var names = groups.map(function (gr) { return gr.name; }), count = groups.reduce(function (a, gr) { return a + gr.items.length; }, 0);
     var noun = kind === "artists" ? "artist" : kind === "albums" ? "album" : "song";
-    return { result: out, summary: "Imported " + count + " " + noun + (count === 1 ? "" : "s") + (kind === "artists" ? "" : " by " + (names.length > 3 ? names.slice(0, 3).join(", ") + "…" : names.join(", "))) + " from Spotify (" + plays.toLocaleString("en-US") + " plays counted)." };
+    var by = g === "month" ? "" : ", " + P.ADJ[g];
+    return { result: { grain: g, ws: ws, artists: out }, summary: "Imported " + count + " " + noun + (count === 1 ? "" : "s") + (kind === "artists" ? "" : " by " + (names.length > 3 ? names.slice(0, 3).join(", ") + "…" : names.join(", "))) + " from Spotify" + by + " (" + plays.toLocaleString("en-US") + " plays counted)." };
   }
   // Weekly play counts per song, shaped for the Personal chart maker.
   function chartAgg(o) {
@@ -204,7 +213,7 @@
       if (m) topN(m, o.cap).forEach(function (k) { var n = m.get(k); plays += n; list.push({ t: S[Math.floor(k / 4194304)], a: S[k % 4194304], n: n }); });
       out[new Date(we2 * 86400000).toISOString().slice(0, 10)] = list; count++;
     }
-    return { result: out, summary: "Imported " + count + " week" + (count === 1 ? "" : "s") + " from Spotify (" + plays.toLocaleString("en-US") + " plays counted)." };
+    return { result: out, meta: { weekStart: (o.weekEnd + 1) % 7 }, summary: "Imported " + count + " week" + (count === 1 ? "" : "s") + " from Spotify (" + plays.toLocaleString("en-US") + " plays counted)." };
   }
 
   /* ---------------- the dialog ---------------- */
@@ -230,17 +239,24 @@
     var Z = zones(), isTable = cfg.mode === "table", kind = cfg.kind || "albums";
     var zoneOpts = Z.list.map(function (z) { return opt(z, z.replace(/_/g, " "), z === Z.detected); }).join("");
     var noun = kind === "artists" ? "artists" : kind === "albums" ? "albums" : "songs";
+    var DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    var dayOpts = function (sel) { return DAYS.map(function (d, i) { return opt(i, d + (i === 5 ? " (Fri–Thu, like Billboard)" : ""), i === sel); }).join(""); };
+    var g0 = cfg.grain || "month", ws0 = cfg.ws == null ? 1 : cfg.ws;
     var tableOpts =
+      '<div class="row"><label>Period <select id="sp-grain">' + [["day", "Day"], ["week", "Week"], ["month", "Month"], ["year", "Year"]].map(function (x) { return opt(x[0], x[1], x[0] === g0); }).join("") + '</select></label>' +
+      '<label id="sp-wsl">Weeks start on <select id="sp-ws">' + dayOpts(ws0) + '</select></label>' +
+      '<label id="sp-backl">Go back <select id="sp-back"></select></label></div>' +
+      '<p class="msg" id="sp-gnote"></p>' +
       '<div class="row"><label>Rank by plays in <select id="sp-range"></select></label>' +
       '<label>How many ' + noun + ' <input type="number" id="sp-n" min="1" max="40" value="10"></label></div>' +
       (kind === "artists" ? "" :
         '<div class="row"><label>Artist <input type="text" id="sp-artist" list="sp-artists" placeholder="Artist name" autocomplete="off"></label>' +
         '<label><input type="checkbox" id="sp-top5"> Use my 5 most-played artists instead</label></div><datalist id="sp-artists"></datalist>');
     var chartOpts =
-      '<div class="row"><label>Weeks end on <select id="sp-weekend">' + ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(function (d, i) { return opt(i, d, i === 4); }).join("") + '</select></label>' +
+      '<div class="row"><label>Weeks start on <select id="sp-wstart">' + dayOpts(cfg.weekStart == null ? 5 : cfg.weekStart) + '</select></label>' +
       '<label>Weeks to import <select id="sp-weeks">' + opt(8, "Last 8") + opt(12, "Last 12", true) + opt(26, "Last 26") + opt(52, "Last 52") + opt(0, "All of them") + '</select></label></div>' +
       '<div class="row"><label><input type="checkbox" id="sp-skip" checked> Skip the last week if it\'s incomplete</label></div>' +
-      '<p class="msg">Billboard\'s weeks run Friday to Thursday, so Thursday is the default. The top 100 songs of each week are kept.</p>';
+      '<p class="msg">Billboard\'s weeks run Friday to Thursday, so Friday is the default. The top 100 songs of each week are kept.</p>';
     dlg = el('<dialog class="spdlg" aria-labelledby="sp-h"><div class="spin">' +
       '<h2 id="sp-h">Import from Spotify</h2>' +
       '<p class="msg">Choose the zip you downloaded from Spotify, or the Streaming_History JSON files inside it. Files are read in this browser and aren\'t uploaded anywhere.</p>' +
@@ -273,6 +289,18 @@
         if (kind === "albums" && !DB.hasAlbum) warn.textContent = "These files have no album names (the account data only covers songs and artists). Albums needs the extended streaming history.";
       }
     }
+    var BACK = { day: [[14, "14 days"], [30, "30 days"], [60, "60 days"], [90, "90 days"], [180, "180 days"]], week: [[12, "12 weeks"], [26, "26 weeks"], [52, "52 weeks"], [104, "104 weeks"]] };
+    var GNOTE = { day: "Each day becomes one column. Only the most recent days are kept so the table stays a readable size.",
+      week: "Weeks run from the day you pick. Only the most recent weeks are kept.",
+      month: "", year: "Each year becomes one column. Everything in the files is kept." };
+    function syncGrain() {
+      if (!isTable) return;
+      var g = $("sp-grain").value, b = BACK[g];
+      $("sp-wsl").hidden = g !== "week"; $("sp-backl").hidden = !b;
+      if (b) { var cur = $("sp-back").value; $("sp-back").innerHTML = b.map(function (x, ix) { return opt(x[0], x[1], cur ? String(x[0]) === cur : ix === 1); }).join(""); }
+      $("sp-gnote").textContent = GNOTE[g] || ""; $("sp-gnote").hidden = !GNOTE[g];
+    }
+    if (isTable) { $("sp-grain").addEventListener("change", function () { $("sp-back").innerHTML = ""; syncGrain(); }); syncGrain(); }
     async function load(files) {
       if (!files || !files.length) return;
       $("sp-go").disabled = true; $("sp-opts").hidden = true; warn.textContent = "";
@@ -293,13 +321,15 @@
       try {
         if (isTable) {
           if (kind === "albums" && !DB.hasAlbum) throw new Error("These files have no album names. Use the extended streaming history for albums, or switch to Songs or Artists.");
-          r = tableAgg(Object.assign(base, { kind: kind, range: $("sp-range").value, n: Math.min(40, Math.max(1, Number($("sp-n").value) || 10)),
+          var gsel = $("sp-grain").value;
+          r = tableAgg(Object.assign(base, { kind: kind, grain: gsel, ws: Number($("sp-ws").value), back: gsel === "day" || gsel === "week" ? Number($("sp-back").value) : 0, range: $("sp-range").value, n: Math.min(40, Math.max(1, Number($("sp-n").value) || 10)),
             artist: kind === "artists" ? "" : $("sp-artist").value, top5: kind !== "artists" && $("sp-top5").checked }));
         } else {
-          r = chartAgg(Object.assign(base, { weekEnd: Number($("sp-weekend").value), weeks: Number($("sp-weeks").value), skipLast: $("sp-skip").checked, cap: 100 }));
+          var wstart = Number($("sp-wstart").value);
+          r = chartAgg(Object.assign(base, { weekEnd: (wstart + 6) % 7, weeks: Number($("sp-weeks").value), skipLast: $("sp-skip").checked, cap: 100 }));
         }
       } catch (e) { warn.textContent = e.message; return; }
-      cfg.onImport(r.result, r.summary); dlg.close();
+      cfg.onImport(r.result, r.summary, r.meta); dlg.close();
     });
     dlg.showModal();
     if (DB) fillOptions();   // plays already read this visit
