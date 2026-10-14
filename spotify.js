@@ -94,6 +94,91 @@
     return db;
   }
 
+  /* ---------------- saved history (kept in this browser's own database) ----------------
+     Every play is stored once, so any period or chart can be rebuilt without uploading again.
+     Newer exports are merged in; a play already saved (same minute, song and artist) is skipped. */
+  var KEPT = null;          // the saved plays, once loaded
+  var KEPT_TRIED = false, STORE_OK = true;
+  function idbRun(mode, fn) {
+    return new Promise(function (res, rej) {
+      if (!window.indexedDB) return rej(new Error("This browser can't keep saved data."));
+      var open;
+      try { open = indexedDB.open("musicTools.history", 1); } catch (e) { return rej(e); }
+      open.onupgradeneeded = function () { open.result.createObjectStore("kv"); };
+      open.onerror = function () { rej(open.error || new Error("Couldn't open the browser's storage.")); };
+      open.onsuccess = function () {
+        var db = open.result, out;
+        try {
+          var tx = db.transaction("kv", mode), req = fn(tx.objectStore("kv"));
+          if (req) req.onsuccess = function () { out = req.result; };
+          tx.oncomplete = function () { db.close(); res(out); };
+          tx.onabort = tx.onerror = function () { db.close(); rej(tx.error || new Error("Couldn't write to the browser's storage.")); };
+        } catch (e) { db.close(); rej(e); }
+      };
+    });
+  }
+  function pack(db) {
+    var n = db.n, r = { v: 1, n: n, ts: new Float64Array(n), ms: new Int32Array(n), tr: new Int32Array(n), ar: new Int32Array(n), al: new Int32Array(n), strs: db.strs.slice(), hasAlbum: !!db.hasAlbum, files: db.files || 0, saved: Date.now() };
+    for (var i = 0; i < n; i++) { r.ts[i] = db.ts[i]; r.ms[i] = Math.min(db.ms[i], 2147483647); r.tr[i] = db.tr[i]; r.ar[i] = db.ar[i]; r.al[i] = db.al[i]; }
+    return r;
+  }
+  function unpack(r) {
+    var db = blankDB();
+    db.ts = Array.from(r.ts); db.ms = Array.from(r.ms); db.tr = Array.from(r.tr); db.ar = Array.from(r.ar); db.al = Array.from(r.al);
+    db.strs = r.strs.slice(); db.strs.forEach(function (s, i) { db.map.set(s, i); });
+    db.n = db.ts.length; db.hasAlbum = !!r.hasAlbum; db.files = r.files || 0;
+    return db;
+  }
+  function loadKept() {
+    return idbRun("readonly", function (s) { return s.get("plays"); }).then(function (rec) { return rec && rec.n ? unpack(rec) : null; });
+  }
+  function saveKept() {
+    return idbRun("readwrite", function (s) { return s.put(pack(KEPT), "plays"); }).then(function () {
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    });
+  }
+  // Adds the plays of `inc` to `base`. Only plays already in `base` count as duplicates.
+  function mergeDB(base, inc) {
+    var seen = new Map(), i, added = 0, dup = 0;
+    for (i = 0; i < base.n; i++) seen.set(Math.floor(base.ts[i] / 60000) + "|" + base.tr[i] + "|" + base.ar[i], i);
+    for (i = 0; i < inc.n; i++) {
+      var tr = intern(base, inc.strs[inc.tr[i]]), ar = intern(base, inc.strs[inc.ar[i]]), al = inc.al[i] < 0 ? -1 : intern(base, inc.strs[inc.al[i]]);
+      var j = seen.get(Math.floor(inc.ts[i] / 60000) + "|" + tr + "|" + ar);
+      if (j !== undefined) {   // already saved; but fill in the album if the saved copy lacked one
+        dup++; if (base.al[j] < 0 && al >= 0) { base.al[j] = al; base.hasAlbum = true; }
+        continue;
+      }
+      base.ts.push(inc.ts[i]); base.ms.push(inc.ms[i]); base.tr.push(tr); base.ar.push(ar); base.al.push(al);
+      if (al >= 0) base.hasAlbum = true;
+      added++;
+    }
+    base.n = base.ts.length; base.files += inc.files;
+    return { added: added, dup: dup };
+  }
+  async function backupBlob(db) {
+    var r = pack(db), json = JSON.stringify({ v: 1, n: r.n, strs: r.strs, hasAlbum: r.hasAlbum, files: r.files }), enc = new TextEncoder();
+    var len = enc.encode(json).length, pad = (8 - ((4 + len) % 8)) % 8;
+    var hdr = enc.encode(json + " ".repeat(pad)), head = new Uint8Array(4);
+    new DataView(head.buffer).setUint32(0, hdr.length, true);
+    var blob = new Blob([head, hdr, r.ts, r.ms, r.tr, r.ar, r.al]);
+    if (typeof CompressionStream !== "undefined") blob = await new Response(blob.stream().pipeThrough(new CompressionStream("gzip"))).blob();
+    return blob;
+  }
+  async function readBackup(file) {
+    var blob = file, magic = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+    if (magic[0] === 0x1f && magic[1] === 0x8b) {
+      if (typeof DecompressionStream === "undefined") throw new Error("This browser can't open that backup.");
+      blob = await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+    }
+    var ab = await blob.arrayBuffer(), bad = new Error("That doesn't look like a backup made by this site.");
+    if (ab.byteLength < 12) throw bad;
+    var hl = new DataView(ab).getUint32(0, true), h;
+    try { h = JSON.parse(new TextDecoder().decode(new Uint8Array(ab, 4, hl))); } catch (e) { throw bad; }
+    var n = h && h.v === 1 ? h.n : -1, off = 4 + hl;
+    if (!(n >= 0) || !Array.isArray(h.strs) || off % 8 || ab.byteLength !== off + n * 24) throw bad;
+    return unpack({ ts: new Float64Array(ab, off, n), ms: new Int32Array(ab, off + n * 8, n), tr: new Int32Array(ab, off + n * 12, n), ar: new Int32Array(ab, off + n * 16, n), al: new Int32Array(ab, off + n * 20, n), strs: h.strs, hasAlbum: h.hasAlbum, files: h.files });
+  }
+
   /* ---------------- time helpers ---------------- */
   function localizer(tz) {
     var fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" });
@@ -269,9 +354,13 @@
       '<p class="msg">Billboard\'s weeks run Friday to Thursday, so Friday is the default. The top 100 songs of each week are kept.</p>';
     dlg = el('<dialog class="spdlg" aria-labelledby="sp-h"><div class="spin">' +
       '<h2 id="sp-h">Import from Spotify</h2>' +
-      '<p class="msg">Choose the zip you downloaded from Spotify, or the Streaming_History JSON files inside it. Files are read in this browser and aren\'t uploaded anywhere.</p>' +
+      '<p class="msg">Choose the zip you downloaded from Spotify, or the Streaming_History JSON files inside it. Files are read in this browser and aren\'t uploaded anywhere. Your plays can be kept in this browser, so later you only add a newer export.</p>' +
       '<div class="drop" id="sp-drop"><label class="filebtn">Choose files<input type="file" id="sp-file" accept=".zip,.json" multiple hidden></label>' +
       '<div class="msg" id="sp-status" style="margin-top:8px">or drop them here</div></div>' +
+      '<div class="row"><label><input type="checkbox" id="sp-keep" checked> Keep my plays in this browser</label></div>' +
+      '<div class="row" id="sp-histrow"><button class="alt" id="sp-backup" type="button">Back up history</button>' +
+      '<label class="filebtn">Restore backup<input type="file" id="sp-restore" accept=".mthist,.gz" hidden></label>' +
+      '<button class="alt" id="sp-clear" type="button">Delete saved history</button></div>' +
       '<div class="spopts" id="sp-opts" hidden>' +
       '<div class="row"><label>Time zone <select id="sp-tz">' + zoneOpts + '</select></label>' +
       '<label>Count a play after <input type="number" id="sp-sec" min="0" max="300" value="30"> sec</label></div>' +
@@ -285,7 +374,8 @@
 
     function fillOptions() {
       var c = coverage(), ys = [], y0 = new Date(c.lo).getUTCFullYear(), y1 = new Date(c.hi).getUTCFullYear();
-      status.textContent = DB.n.toLocaleString("en-US") + " plays from " + fmtMonth(c.lo) + " to " + fmtMonth(c.hi) + " (" + DB.files + " file" + (DB.files === 1 ? "" : "s") + ").";
+      status.textContent = (DB === KEPT ? "Saved in this browser: " : "") + DB.n.toLocaleString("en-US") + " plays from " + fmtMonth(c.lo) + " to " + fmtMonth(c.hi) + (DB === KEPT ? "." : " (" + DB.files + " file" + (DB.files === 1 ? "" : "s") + ").") + (note ? " " + note : "");
+      syncHist();
       $("sp-opts").hidden = false; $("sp-go").disabled = false;
       if (isTable) {
         for (var y = y1; y >= y0; y--) ys.push(opt(y, String(y)));
@@ -311,12 +401,52 @@
       $("sp-gnote").textContent = GNOTE[g] || ""; $("sp-gnote").hidden = !GNOTE[g];
     }
     if (isTable) { $("sp-grain").addEventListener("change", function () { $("sp-back").innerHTML = ""; syncGrain(); }); syncGrain(); }
+    var note = "";
+    function syncHist() {
+      $("sp-backup").hidden = $("sp-clear").hidden = !(KEPT && KEPT.n);
+    }
+    function showFail(e) { status.textContent = ""; warn.textContent = e.message; $("sp-opts").hidden = !DB; $("sp-go").disabled = !DB; if (DB) fillOptions(); }
+    // adds plays to the saved history (when "keep" is on) and shows the result
+    async function absorb(inc, force) {
+      warn.textContent = ""; note = "";
+      if (!force && !$("sp-keep").checked) { DB = inc; fillOptions(); return; }
+      status.textContent = "Saving…";
+      if (!KEPT_TRIED) { KEPT_TRIED = true; try { KEPT = await loadKept(); } catch (e) { STORE_OK = false; } }
+      var r;
+      if (!KEPT || !KEPT.n) { KEPT = inc; r = { added: inc.n, dup: 0 }; } else r = mergeDB(KEPT, inc);
+      DB = KEPT;
+      note = r.added.toLocaleString("en-US") + " new play" + (r.added === 1 ? "" : "s") + " added" + (r.dup ? ", " + r.dup.toLocaleString("en-US") + " already saved" : "") + ".";
+      fillOptions();
+      if (!STORE_OK) { warn.textContent = "This browser can't keep saved data here, so the plays are available for this visit only."; return; }
+      try { await saveKept(); }
+      catch (e) { warn.textContent = "Couldn't save the plays in this browser (" + e.message + "). They're available for this visit only."; }
+    }
     async function load(files) {
       if (!files || !files.length) return;
       $("sp-go").disabled = true; $("sp-opts").hidden = true; warn.textContent = "";
-      try { DB = await readFiles(files, function (m) { status.textContent = m; }); fillOptions(); }
-      catch (e) { DB = null; status.textContent = ""; warn.textContent = e.message; $("sp-opts").hidden = false; $("sp-go").disabled = true; }
+      try { await absorb(await readFiles(files, function (m) { status.textContent = m; })); }
+      catch (e) { showFail(e); }
     }
+    $("sp-restore").addEventListener("change", async function (e) {
+      var f = e.target.files[0]; e.target.value = ""; if (!f) return;
+      $("sp-go").disabled = true; $("sp-opts").hidden = true; warn.textContent = ""; status.textContent = "Reading backup…";
+      try { await absorb(await readBackup(f), true); }
+      catch (err) { showFail(err); }
+    });
+    $("sp-backup").addEventListener("click", async function () {
+      if (!KEPT || !KEPT.n) return;
+      try {
+        var blob = await backupBlob(KEPT), a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = "music-tools-history-" + new Date().toISOString().slice(0, 10) + ".mthist";
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      } catch (e) { warn.textContent = e.message; }
+    });
+    $("sp-clear").addEventListener("click", async function () {
+      if (!confirm("Delete the plays saved in this browser? You can bring them back from a backup, or by importing your Spotify files again.")) return;
+      try { await idbRun("readwrite", function (s) { return s.delete("plays"); }); } catch (e) { warn.textContent = e.message; return; }
+      if (DB === KEPT) { DB = null; $("sp-opts").hidden = true; $("sp-go").disabled = true; }
+      KEPT = null; note = ""; status.textContent = "Saved history deleted. Choose files to start again."; warn.textContent = ""; syncHist();
+    });
     $("sp-file").addEventListener("change", function (e) { load(e.target.files); e.target.value = ""; });
     var drop = $("sp-drop");
     ["dragenter", "dragover"].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
@@ -342,7 +472,16 @@
       cfg.onImport(r.result, r.summary, r.meta); dlg.close();
     });
     dlg.showModal();
+    syncHist();
     if (DB) fillOptions();   // plays already read this visit
+    else if (!KEPT_TRIED) {  // plays saved from an earlier visit
+      KEPT_TRIED = true; status.textContent = "Looking for saved history…";
+      loadKept().then(function (k) {
+        if (!KEPT) KEPT = k;
+        if (!dlg.isConnected) return;
+        if (KEPT && !DB) { DB = KEPT; fillOptions(); } else if (!DB) status.textContent = "or drop them here";
+      }, function () { STORE_OK = false; if (dlg.isConnected) status.textContent = "or drop them here"; });
+    }
   };
   SP._test = { addPlays: addPlays, blankDB: blankDB, tableAgg: function (o, db) { DB = db; return tableAgg(o); }, chartAgg: function (o, db) { DB = db; return chartAgg(o); } };
 })();
