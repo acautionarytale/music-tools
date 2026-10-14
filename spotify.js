@@ -1,11 +1,15 @@
 /* ------------------------------------------------------------------
-   Spotify import, shared by the Streams table maker and the Personal
-   chart maker. Everything happens in the browser: the files you choose
-   are read here and are never uploaded anywhere.
+   Spotify library and import, shared by the Spotify library page, the
+   Streams table maker, the Cumulative graph and the Personal chart maker.
+   Everything happens in the browser: the files you choose are read here
+   and are never uploaded anywhere. Plays are saved in the browser's own
+   database (IndexedDB) so they only need adding once.
 
    SpotifyImport.open({ mode:"table", kind:"albums"|"songs"|"artists", grain, ws, aliases:{ artist:{ alias:target } }, onImport(result, summary) })
        result is { grain, ws, artists:{ name:{ order, vals } } }; needs periods.js
    SpotifyImport.open({ mode:"chart", weekStart, onImport(result, summary, { weekStart }) })
+   Options for mode "table": allTime (offers every day/week of history), single (one artist only, no "top 5")
+   SpotifyImport.lib: the library API used by the Spotify library page (history, settings, merges)
    ------------------------------------------------------------------ */
 (function () {
   var SP = window.SpotifyImport = {};
@@ -98,7 +102,7 @@
      Every play is stored once, so any period or chart can be rebuilt without uploading again.
      Newer exports are merged in; a play already saved (same minute, song and artist) is skipped. */
   var KEPT = null;          // the saved plays, once loaded
-  var KEPT_TRIED = false, STORE_OK = true;
+  var STORE_OK = true;
   function idbRun(mode, fn) {
     return new Promise(function (res, rej) {
       if (!window.indexedDB) return rej(new Error("This browser can't keep saved data."));
@@ -179,6 +183,109 @@
     return unpack({ ts: new Float64Array(ab, off, n), ms: new Int32Array(ab, off + n * 8, n), tr: new Int32Array(ab, off + n * 12, n), ar: new Int32Array(ab, off + n * 16, n), al: new Int32Array(ab, off + n * 20, n), strs: h.strs, hasAlbum: h.hasAlbum, files: h.files });
   }
 
+  /* ---------------- the Spotify library: shared settings, merges and helpers ----------------
+     Time zone, the "count a play after" cutoff and album/song merges are set once (in the Spotify
+     library tool, or in the import window) and used by every tool. Merges are applied when numbers
+     are pulled out, so the saved plays themselves never change. */
+  var SRC = (document.currentScript && document.currentScript.src) || location.href;
+  var LIBKEY = "musicTools.library.v1";
+  function detectTZ() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) { return "UTC"; } }
+  function getLib() {
+    var s = null; try { s = JSON.parse(localStorage.getItem(LIBKEY) || "null"); } catch (e) {}
+    s = s && typeof s === "object" ? s : {};
+    var r = s.rules && typeof s.rules === "object" ? s.rules : {};
+    return { tz: typeof s.tz === "string" && s.tz ? s.tz : detectTZ(), minSec: isFinite(s.minSec) && s.minSec >= 0 ? +s.minSec : 30,
+      rules: { albums: r.albums && typeof r.albums === "object" ? r.albums : {}, songs: r.songs && typeof r.songs === "object" ? r.songs : {} }, migrated: !!s.migrated };
+  }
+  function setLib(L) { try { localStorage.setItem(LIBKEY, JSON.stringify(L)); return true; } catch (e) { return false; } }
+  var hasOwn = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+  function canonName(map, n) { var g = 0; while (map && hasOwn(map, n) && g++ < 20) n = map[n]; return n; }
+  // rules saved in the library, plus any the tool itself holds: { artist: { from: to } }
+  function combinedRules(kind, tool) {
+    var L = getLib().rules[kind] || {}, out = {};
+    Object.keys(L).forEach(function (a) { out[a] = Object.assign({}, L[a]); });
+    Object.keys(tool || {}).forEach(function (a) { out[a] = Object.assign(out[a] || {}, tool[a]); });
+    return out;
+  }
+  function addRule(L, kind, artist, from, to) {
+    if (!from || !to || from === to) return false;
+    var a = L.rules[kind][artist] || (L.rules[kind][artist] = {});
+    if (canonName(a, to) === from) return false;   // would loop
+    Object.keys(a).forEach(function (k) { if (a[k] === from) a[k] = to; });
+    a[from] = to; return true;
+  }
+  function removeRule(L, kind, artist, from) {
+    var a = L.rules[kind][artist]; if (!a) return;
+    delete a[from]; if (!Object.keys(a).length) delete L.rules[kind][artist];
+  }
+  var KEPT_P = null;
+  function ensureKept() {
+    if (!KEPT_P) KEPT_P = loadKept().then(function (k) { if (!KEPT) KEPT = k; return KEPT; }, function () { STORE_OK = false; return KEPT; });
+    return KEPT_P;
+  }
+  // folds freshly read plays into the saved history and saves it
+  async function addToKept(inc) {
+    await ensureKept();
+    var r, err = "";
+    if (!KEPT || !KEPT.n) { KEPT = inc; r = { added: inc.n, dup: 0 }; } else r = mergeDB(KEPT, inc);
+    if (!STORE_OK) err = "This browser can't keep saved data here, so the plays are available for this visit only.";
+    else { try { await saveKept(); } catch (e) { err = "Couldn't save the plays in this browser (" + e.message + "). They're available for this visit only."; } }
+    return { added: r.added, dup: r.dup, err: err };
+  }
+  async function downloadBackup() {
+    if (!KEPT || !KEPT.n) return;
+    var blob = await backupBlob(KEPT), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "music-tools-history-" + new Date().toISOString().slice(0, 10) + ".mthist";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+  }
+  async function clearKept() {
+    await idbRun("readwrite", function (s) { return s.delete("plays"); });
+    KEPT = null; KEPT_P = Promise.resolve(null);
+  }
+  function libStatus() {
+    if (!KEPT || !KEPT.n) return null;
+    var lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < KEPT.n; i++) { var t = KEPT.ts[i]; if (t < lo) lo = t; if (t > hi) hi = t; }
+    return { n: KEPT.n, lo: lo, hi: hi, files: KEPT.files, hasAlbum: KEPT.hasAlbum, artists: new Set(KEPT.ar).size, mb: Math.max(0.1, Math.round(KEPT.n * 24 / 1e5) / 10) };
+  }
+  function libArtists(limit) {
+    if (!KEPT) return [];
+    var minMs = getLib().minSec * 1000, c = new Map();
+    for (var i = 0; i < KEPT.n; i++) if (KEPT.ms[i] >= minMs) c.set(KEPT.ar[i], (c.get(KEPT.ar[i]) || 0) + 1);
+    return Array.from(c.entries()).sort(function (a, b) { return b[1] - a[1]; }).slice(0, limit || 300).map(function (e) { return { name: KEPT.strs[e[0]], plays: e[1] }; });
+  }
+  // every album (or song) one artist has, with plays, most played first
+  function libItems(artist, kind) {
+    if (!KEPT) return [];
+    var ai = KEPT.map.get(artist); if (ai === undefined) return [];
+    var minMs = getLib().minSec * 1000, arr = kind === "songs" ? KEPT.tr : KEPT.al, m = new Map();
+    for (var i = 0; i < KEPT.n; i++) { if (KEPT.ar[i] !== ai || KEPT.ms[i] < minMs) continue; var it = arr[i]; if (it >= 0) m.set(it, (m.get(it) || 0) + 1); }
+    return Array.from(m.entries()).sort(function (a, b) { return b[1] - a[1]; }).map(function (e) { return { name: KEPT.strs[e[0]], plays: e[1] }; });
+  }
+  // every artist's albums (or songs) in one pass: [{ artist, plays, items:[{name, plays}] }]
+  function libAllItems(kind) {
+    if (!KEPT) return [];
+    var minMs = getLib().minSec * 1000, arr = kind === "songs" ? KEPT.tr : KEPT.al, per = new Map(), tot = new Map(), i;
+    for (i = 0; i < KEPT.n; i++) {
+      if (KEPT.ms[i] < minMs) continue;
+      tot.set(KEPT.ar[i], (tot.get(KEPT.ar[i]) || 0) + 1);
+      var it = arr[i]; if (it < 0) continue;
+      var k = KEPT.ar[i] * 4194304 + it; per.set(k, (per.get(k) || 0) + 1);
+    }
+    var by = new Map();
+    per.forEach(function (c, k) { var a = Math.floor(k / 4194304); if (!by.has(a)) by.set(a, []); by.get(a).push({ name: KEPT.strs[k % 4194304], plays: c }); });
+    var out = [];
+    by.forEach(function (items, a) { items.sort(function (x, y) { return y.plays - x.plays; }); out.push({ artist: KEPT.strs[a], plays: tot.get(a) || 0, items: items }); });
+    return out.sort(function (x, y) { return y.plays - x.plays; });
+  }
+  SP.lib = {
+    get: getLib, set: setLib, addRule: addRule, removeRule: removeRule, canon: canonName,
+    ready: ensureKept, status: libStatus, artists: libArtists, items: libItems, allItems: libAllItems, backup: downloadBackup, clear: clearKept,
+    addFiles: async function (files, say) { return addToKept(await readFiles(files, say || function () {})); },
+    restore: async function (file) { return addToKept(await readBackup(file)); },
+    storeOk: function () { return STORE_OK; }, zones: function () { return zones(); }, page: function (rel) { return new URL(rel, SRC).href; }
+  };
+
   /* ---------------- time helpers ---------------- */
   function localizer(tz) {
     var fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" });
@@ -233,11 +340,12 @@
     var groupOf = function (i) { return kind === "artists" ? 0 : DB.ar[i]; };
     // names the user has merged before (for example two editions of one album) are counted as one
     var redirect = new Map();
-    Object.keys(o.aliases || {}).forEach(function (an) {
-      var gi = kind === "artists" ? 0 : DB.map.get(an), al = o.aliases[an]; if (gi === undefined) return;
+    var AL = combinedRules(kind, o.aliases);
+    Object.keys(AL).forEach(function (an) {
+      var gi = kind === "artists" ? 0 : DB.map.get(an), al = AL[an]; if (gi === undefined) return;
       Object.keys(al).forEach(function (from) {
         var fi = DB.map.get(from); if (fi === undefined) return;
-        redirect.set(gi * 4194304 + fi, intern(DB, P.canon(al, from)));
+        redirect.set(gi * 4194304 + fi, intern(DB, canonName(al, from)));
       });
     });
     var rawItem = function (i) { return kind === "artists" ? DB.ar[i] : kind === "albums" ? DB.al[i] : DB.tr[i]; };
@@ -288,13 +396,18 @@
   // Weekly play counts per song, shaped for the Personal chart maker.
   function chartAgg(o) {
     var L = localizer(o.tz), N = DB.n, minMs = o.minSec * 1000, i, perWeek = new Map(), lastDay = -Infinity;
+    var songRedirect = new Map(), SR = getLib().rules.songs;   // songs merged in the library count as one
+    Object.keys(SR).forEach(function (an) {
+      var ai = DB.map.get(an); if (ai === undefined) return;
+      Object.keys(SR[an]).forEach(function (from) { var fi = DB.map.get(from); if (fi !== undefined) songRedirect.set(ai * 4194304 + fi, intern(DB, canonName(SR[an], from))); });
+    });
     for (i = 0; i < N; i++) {
       if (DB.ms[i] < minMs) continue;
       var local = L(DB.ts[i]), day = Math.floor(local / 86400000), dow = (day + 4) % 7;
       if (day > lastDay) lastDay = day;
       var we = day + ((o.weekEnd - dow + 7) % 7), w = perWeek.get(we);
       if (!w) { w = new Map(); perWeek.set(we, w); }
-      var k = DB.tr[i] * 4194304 + DB.ar[i]; w.set(k, (w.get(k) || 0) + 1);
+      var tx = songRedirect.get(DB.ar[i] * 4194304 + DB.tr[i]), k = (tx === undefined ? DB.tr[i] : tx) * 4194304 + DB.ar[i]; w.set(k, (w.get(k) || 0) + 1);
     }
     var ends = Array.from(perWeek.keys()).sort(function (a, b) { return a - b; });
     if (!ends.length) throw new Error("No plays counted. Try a lower play length.");
@@ -331,8 +444,9 @@
     if (!document.getElementById("spstyle")) { var st = document.createElement("style"); st.id = "spstyle"; st.textContent = CSS; document.head.appendChild(st); }
     var dlg = document.querySelector("dialog.spdlg");
     if (dlg) dlg.remove();
-    var Z = zones(), isTable = cfg.mode === "table", kind = cfg.kind || "albums";
-    var zoneOpts = Z.list.map(function (z) { return opt(z, z.replace(/_/g, " "), z === Z.detected); }).join("");
+    var L = getLib(), Z = zones(), isTable = cfg.mode === "table", kind = cfg.kind || "albums";
+    var zoneList = Z.list.indexOf(L.tz) < 0 ? [L.tz].concat(Z.list) : Z.list;
+    var zoneOpts = zoneList.map(function (z) { return opt(z, z.replace(/_/g, " "), z === L.tz); }).join("");
     var noun = kind === "artists" ? "artists" : kind === "albums" ? "albums" : "songs";
     var DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     var dayOpts = function (sel) { return DAYS.map(function (d, i) { return opt(i, d + (i === 5 ? " (Fri–Thu, like Billboard)" : ""), i === sel); }).join(""); };
@@ -346,45 +460,43 @@
       '<label>How many ' + noun + ' <input type="number" id="sp-n" min="1" max="40" value="10"></label></div>' +
       (kind === "artists" ? "" :
         '<div class="row"><label>Artist <input type="text" id="sp-artist" list="sp-artists" placeholder="Artist name" autocomplete="off"></label>' +
-        '<label><input type="checkbox" id="sp-top5"> Use my 5 most-played artists instead</label></div><datalist id="sp-artists"></datalist>');
+        (cfg.single ? "" : '<label><input type="checkbox" id="sp-top5"> Use my 5 most-played artists instead</label>') + '</div><datalist id="sp-artists"></datalist>');
     var chartOpts =
       '<div class="row"><label>Weeks start on <select id="sp-wstart">' + dayOpts(cfg.weekStart == null ? 5 : cfg.weekStart) + '</select></label>' +
       '<label>Weeks to import <select id="sp-weeks">' + opt(8, "Last 8") + opt(12, "Last 12", true) + opt(26, "Last 26") + opt(52, "Last 52") + opt(0, "All of them") + '</select></label></div>' +
       '<div class="row"><label><input type="checkbox" id="sp-skip" checked> Skip the last week if it\'s incomplete</label></div>' +
       '<p class="msg">Billboard\'s weeks run Friday to Thursday, so Friday is the default. The top 100 songs of each week are kept.</p>';
     dlg = el('<dialog class="spdlg" aria-labelledby="sp-h"><div class="spin">' +
-      '<h2 id="sp-h">Import from Spotify</h2>' +
-      '<p class="msg">Choose the zip you downloaded from Spotify, or the Streaming_History JSON files inside it. Files are read in this browser and aren\'t uploaded anywhere. Your plays can be kept in this browser, so later you only add a newer export.</p>' +
+      '<h2 id="sp-h">Import from your Spotify library</h2>' +
+      '<p class="msg" id="sp-sum">Looking for saved history…</p>' +
+      '<details id="sp-add"><summary>Add or update Spotify files</summary>' +
+      '<p class="msg">Choose the zip you downloaded from Spotify, or the Streaming_History JSON files inside it. Files are read in this browser and aren\'t uploaded anywhere. Your plays are saved in this browser, so later you only add a newer export.</p>' +
       '<div class="drop" id="sp-drop"><label class="filebtn">Choose files<input type="file" id="sp-file" accept=".zip,.json" multiple hidden></label>' +
-      '<div class="msg" id="sp-status" style="margin-top:8px">or drop them here</div></div>' +
-      '<div class="row"><label><input type="checkbox" id="sp-keep" checked> Keep my plays in this browser</label></div>' +
-      '<div class="row" id="sp-histrow"><button class="alt" id="sp-backup" type="button">Back up history</button>' +
-      '<label class="filebtn">Restore backup<input type="file" id="sp-restore" accept=".mthist,.gz" hidden></label>' +
-      '<button class="alt" id="sp-clear" type="button">Delete saved history</button></div>' +
+      '<div class="msg" id="sp-status" style="margin-top:8px">or drop them here</div></div></details>' +
+      '<p class="msg">The <a id="sp-liblink" href="' + SP.lib.page("spotify-library/index.html") + '">Spotify library</a> is where you merge album editions, back up or delete your history.</p>' +
       '<div class="spopts" id="sp-opts" hidden>' +
       '<div class="row"><label>Time zone <select id="sp-tz">' + zoneOpts + '</select></label>' +
-      '<label>Count a play after <input type="number" id="sp-sec" min="0" max="300" value="30"> sec</label></div>' +
+      '<label>Count a play after <input type="number" id="sp-sec" min="0" max="300" value="' + L.minSec + '"> sec</label></div>' +
       (isTable ? tableOpts : chartOpts) +
       '<div class="msg spwarn" id="sp-warn"></div></div>' +
       '<div class="row" style="margin-top:14px"><button id="sp-go" disabled>Import</button><button class="alt" id="sp-close" type="button">Close</button></div>' +
       '</div></dialog>');
     document.body.appendChild(dlg);
     var $ = function (id) { return dlg.querySelector("#" + id); };
-    var status = $("sp-status"), warn = $("sp-warn");
+    var status = $("sp-status"), warn = $("sp-warn"), sum = $("sp-sum"), addBox = $("sp-add"), note = "";
 
     function fillOptions() {
       var c = coverage(), ys = [], y0 = new Date(c.lo).getUTCFullYear(), y1 = new Date(c.hi).getUTCFullYear();
-      status.textContent = (DB === KEPT ? "Saved in this browser: " : "") + DB.n.toLocaleString("en-US") + " plays from " + fmtMonth(c.lo) + " to " + fmtMonth(c.hi) + (DB === KEPT ? "." : " (" + DB.files + " file" + (DB.files === 1 ? "" : "s") + ").") + (note ? " " + note : "");
-      syncHist();
+      sum.textContent = DB.n.toLocaleString("en-US") + " plays from " + fmtMonth(c.lo) + " to " + fmtMonth(c.hi) + (DB === KEPT ? " are saved in this browser." : " (this visit only).") + (note ? " " + note : "");
       $("sp-opts").hidden = false; $("sp-go").disabled = false;
       if (isTable) {
         for (var y = y1; y >= y0; y--) ys.push(opt(y, String(y)));
-        $("sp-range").innerHTML = opt("last12", "the last 12 months", true) + ys.join("") + opt("all", "all time");
+        $("sp-range").innerHTML = opt("last12", "the last 12 months", !cfg.allTime) + ys.join("") + opt("all", "all time", !!cfg.allTime);
         if (kind !== "artists") {
           var cnt = new Map(); for (var i = 0; i < DB.n; i++) cnt.set(DB.ar[i], (cnt.get(DB.ar[i]) || 0) + 1);
           var top = topN(cnt, 300);
           $("sp-artists").innerHTML = top.map(function (a) { return '<option value="' + DB.strs[a].replace(/"/g, "&quot;") + '">'; }).join("");
-          $("sp-artist").value = DB.strs[top[0]];
+          if (!$("sp-artist").value) $("sp-artist").value = cfg.artist || DB.strs[top[0]];
         }
         if (kind === "albums" && !DB.hasAlbum) warn.textContent = "These files have no album names (the account data only covers songs and artists). Albums needs the extended streaming history.";
       }
@@ -392,61 +504,33 @@
     var BACK = { day: [[14, "14 days"], [30, "30 days"], [60, "60 days"], [90, "90 days"], [180, "180 days"]], week: [[12, "12 weeks"], [26, "26 weeks"], [52, "52 weeks"], [104, "104 weeks"]] };
     var GNOTE = { day: "Each day becomes one column. Only the most recent days are kept so the table stays a readable size.",
       week: "Weeks run from the day you pick. Only the most recent weeks are kept.",
-      month: "", year: "Each year becomes one column. Everything in the files is kept." };
+      month: "", year: "Each year becomes one column. Everything in your history is kept." };
+    if (cfg.allTime) {
+      BACK.day.unshift([0, "All time"]); BACK.week.unshift([0, "All time"]);
+      GNOTE.day = "Every day from your first play is kept. Pick a shorter stretch for a closer look.";
+      GNOTE.week = "Weeks run from the day you pick, from your first play on.";
+    }
     function syncGrain() {
       if (!isTable) return;
-      var g = $("sp-grain").value, b = BACK[g];
+      var g = $("sp-grain").value, b = BACK[g], def = cfg.allTime ? 0 : 1;
       $("sp-wsl").hidden = g !== "week"; $("sp-backl").hidden = !b;
-      if (b) { var cur = $("sp-back").value; $("sp-back").innerHTML = b.map(function (x, ix) { return opt(x[0], x[1], cur ? String(x[0]) === cur : ix === 1); }).join(""); }
+      if (b) { var cur = $("sp-back").value; $("sp-back").innerHTML = b.map(function (x, ix) { return opt(x[0], x[1], cur ? String(x[0]) === cur : ix === def); }).join(""); }
       $("sp-gnote").textContent = GNOTE[g] || ""; $("sp-gnote").hidden = !GNOTE[g];
     }
     if (isTable) { $("sp-grain").addEventListener("change", function () { $("sp-back").innerHTML = ""; syncGrain(); }); syncGrain(); }
-    var note = "";
-    function syncHist() {
-      $("sp-backup").hidden = $("sp-clear").hidden = !(KEPT && KEPT.n);
-    }
     function showFail(e) { status.textContent = ""; warn.textContent = e.message; $("sp-opts").hidden = !DB; $("sp-go").disabled = !DB; if (DB) fillOptions(); }
-    // adds plays to the saved history (when "keep" is on) and shows the result
-    async function absorb(inc, force) {
-      warn.textContent = ""; note = "";
-      if (!force && !$("sp-keep").checked) { DB = inc; fillOptions(); return; }
-      status.textContent = "Saving…";
-      if (!KEPT_TRIED) { KEPT_TRIED = true; try { KEPT = await loadKept(); } catch (e) { STORE_OK = false; } }
-      var r;
-      if (!KEPT || !KEPT.n) { KEPT = inc; r = { added: inc.n, dup: 0 }; } else r = mergeDB(KEPT, inc);
-      DB = KEPT;
-      note = r.added.toLocaleString("en-US") + " new play" + (r.added === 1 ? "" : "s") + " added" + (r.dup ? ", " + r.dup.toLocaleString("en-US") + " already saved" : "") + ".";
-      fillOptions();
-      if (!STORE_OK) { warn.textContent = "This browser can't keep saved data here, so the plays are available for this visit only."; return; }
-      try { await saveKept(); }
-      catch (e) { warn.textContent = "Couldn't save the plays in this browser (" + e.message + "). They're available for this visit only."; }
-    }
     async function load(files) {
       if (!files || !files.length) return;
-      $("sp-go").disabled = true; $("sp-opts").hidden = true; warn.textContent = "";
-      try { await absorb(await readFiles(files, function (m) { status.textContent = m; })); }
-      catch (e) { showFail(e); }
-    }
-    $("sp-restore").addEventListener("change", async function (e) {
-      var f = e.target.files[0]; e.target.value = ""; if (!f) return;
-      $("sp-go").disabled = true; $("sp-opts").hidden = true; warn.textContent = ""; status.textContent = "Reading backup…";
-      try { await absorb(await readBackup(f), true); }
-      catch (err) { showFail(err); }
-    });
-    $("sp-backup").addEventListener("click", async function () {
-      if (!KEPT || !KEPT.n) return;
+      $("sp-go").disabled = true; $("sp-opts").hidden = true; warn.textContent = ""; note = "";
       try {
-        var blob = await backupBlob(KEPT), a = document.createElement("a");
-        a.href = URL.createObjectURL(blob); a.download = "music-tools-history-" + new Date().toISOString().slice(0, 10) + ".mthist";
-        document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-      } catch (e) { warn.textContent = e.message; }
-    });
-    $("sp-clear").addEventListener("click", async function () {
-      if (!confirm("Delete the plays saved in this browser? You can bring them back from a backup, or by importing your Spotify files again.")) return;
-      try { await idbRun("readwrite", function (s) { return s.delete("plays"); }); } catch (e) { warn.textContent = e.message; return; }
-      if (DB === KEPT) { DB = null; $("sp-opts").hidden = true; $("sp-go").disabled = true; }
-      KEPT = null; note = ""; status.textContent = "Saved history deleted. Choose files to start again."; warn.textContent = ""; syncHist();
-    });
+        var inc = await readFiles(files, function (m) { status.textContent = m; });
+        status.textContent = "Saving…";
+        var r = await addToKept(inc);
+        DB = KEPT; status.textContent = "or drop more files here";
+        note = r.added.toLocaleString("en-US") + " new play" + (r.added === 1 ? "" : "s") + " added" + (r.dup ? ", " + r.dup.toLocaleString("en-US") + " already saved" : "") + ".";
+        fillOptions(); if (r.err) warn.textContent = r.err;
+      } catch (e) { showFail(e); }
+    }
     $("sp-file").addEventListener("change", function (e) { load(e.target.files); e.target.value = ""; });
     var drop = $("sp-drop");
     ["dragenter", "dragover"].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
@@ -458,12 +542,13 @@
       if (!DB) return;
       warn.textContent = "";
       var base = { tz: $("sp-tz").value, minSec: Math.max(0, Number($("sp-sec").value) || 0) }, r;
+      var L2 = getLib(); L2.tz = base.tz; L2.minSec = base.minSec; setLib(L2);   // shared by every tool
       try {
         if (isTable) {
           if (kind === "albums" && !DB.hasAlbum) throw new Error("These files have no album names. Use the extended streaming history for albums, or switch to Songs or Artists.");
           var gsel = $("sp-grain").value;
           r = tableAgg(Object.assign(base, { kind: kind, grain: gsel, ws: Number($("sp-ws").value), back: gsel === "day" || gsel === "week" ? Number($("sp-back").value) : 0, aliases: cfg.aliases || {}, range: $("sp-range").value, n: Math.min(40, Math.max(1, Number($("sp-n").value) || 10)),
-            artist: kind === "artists" ? "" : $("sp-artist").value, top5: kind !== "artists" && $("sp-top5").checked }));
+            artist: kind === "artists" ? "" : $("sp-artist").value, top5: kind !== "artists" && !cfg.single && $("sp-top5").checked }));
         } else {
           var wstart = Number($("sp-wstart").value);
           r = chartAgg(Object.assign(base, { weekEnd: (wstart + 6) % 7, weeks: Number($("sp-weeks").value), skipLast: $("sp-skip").checked, cap: 100 }));
@@ -472,16 +557,12 @@
       cfg.onImport(r.result, r.summary, r.meta); dlg.close();
     });
     dlg.showModal();
-    syncHist();
-    if (DB) fillOptions();   // plays already read this visit
-    else if (!KEPT_TRIED) {  // plays saved from an earlier visit
-      KEPT_TRIED = true; status.textContent = "Looking for saved history…";
-      loadKept().then(function (k) {
-        if (!KEPT) KEPT = k;
-        if (!dlg.isConnected) return;
-        if (KEPT && !DB) { DB = KEPT; fillOptions(); } else if (!DB) status.textContent = "or drop them here";
-      }, function () { STORE_OK = false; if (dlg.isConnected) status.textContent = "or drop them here"; });
-    }
+    var none = function () { sum.textContent = "No saved history yet. Add your Spotify files below."; addBox.open = true; };
+    if (DB) fillOptions();   // plays already loaded this visit
+    else ensureKept().then(function (k) {
+      if (!dlg.isConnected) return;
+      if (k && !DB) { DB = k; fillOptions(); } else if (!DB) none();
+    });
   };
   SP._test = { addPlays: addPlays, blankDB: blankDB, tableAgg: function (o, db) { DB = db; return tableAgg(o); }, chartAgg: function (o, db) { DB = db; return chartAgg(o); } };
 })();

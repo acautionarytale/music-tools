@@ -281,7 +281,7 @@ function isOldSample(k, st){
   if (k==="artists") return o==='["Artist One","Artist Two","Artist Three","Artist Four"]' || (o==='["Laufey","Taylor Swift","Sabrina Carpenter","Madison Beer"]' && big(1e7));
   return false;
 }
-function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({kind, data, uis, style})); }catch(e){} }
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({kind, data, uis, style})); }catch(e){ const m = document.getElementById("loadMsg"); if (m) m.textContent = "This is too much to keep in your browser, so it won\u2019t be remembered next visit. Import fewer weeks or items."; } }
 function readStyle(st){
   st = st || {};
   if (has(THEMES, st.themeId)) style.themeId=st.themeId;

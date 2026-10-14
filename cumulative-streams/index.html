@@ -161,6 +161,13 @@
     </div>
     <div class="msg" id="impMsg">Imports use the data saved in this browser by the Streams table maker, so nothing needs to be typed twice.</div>
     <div class="row" style="margin-top:12px">
+      <label>Pull from the Spotify library:
+        <select id="libKind"><option value="albums">Albums</option><option value="songs">Songs</option><option value="artists">Artists</option></select>
+      </label>
+      <button class="alt small" id="libGo">Pull from Spotify library…</button>
+    </div>
+    <div class="msg" id="libMsg">Reads your saved Spotify history directly, so day by day over all time works. Merges you made in the Spotify library are applied. <a href="../spotify-library/index.html">Open the Spotify library</a></div>
+    <div class="row" style="margin-top:12px">
       <label>Period <select id="grain"></select></label>
       <label id="wsLabel" hidden>Weeks start on <select id="ws"></select></label>
       <span class="msg" id="grainMsg">Uploads pick their own period from the dates: first-of-month dates are monthly, dates a week apart are weekly, other dates are daily.</span>
@@ -296,6 +303,7 @@
 </div>
 
 <script src="../periods.js"></script>
+<script src="../spotify.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const LS_KEY = "cumulativeStreams.v1";
@@ -415,7 +423,7 @@ function sampleState(){
   })));
   return s;
 }
-function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({state, ui, opts})); }catch(e){} }
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({state, ui, opts})); }catch(e){ const m = $("dataMsg"); if (m) m.textContent = "This graph is too big to keep in your browser, so it won\u2019t be remembered next visit. Pull a shorter stretch, or fewer lines."; } }
 function loadSaved(){
   try{
     const s = JSON.parse(localStorage.getItem(LS_KEY));
@@ -660,6 +668,16 @@ $("impGo").addEventListener("click", ()=>{
   const by = set.grain==="month" ? "" : `, ${P.ADJ[set.grain]}`;
   $("impMsg").textContent = (k === "artists" ? `Imported ${art.order.length} artist${art.order.length===1?"":"s"}` : `Imported ${art.order.length} ${art.order.length===1?one:many} by ${name}`) + by + ".";
   $("grainMsg").textContent = ""; opts.titleDirty = false; refreshAll();
+});
+
+$("libGo").addEventListener("click", ()=>{
+  window.SpotifyImport.open({ mode:"table", kind:$("libKind").value, grain:state.grain, ws:state.ws, allTime:true, single:true, aliases:{}, onImport:(result, summary)=>{
+    const names = Object.keys(result.artists), grp = names.length && result.artists[names[0]];
+    if (!grp || !grp.order.length){ $("libMsg").textContent = "Nothing came back for those choices."; return; }
+    const err = mergeData(grp.order, grp.vals, $("replace").checked, result.grain, result.ws);
+    if (err){ $("libMsg").textContent = err; return; }
+    $("libMsg").textContent = summary; $("grainMsg").textContent = ""; opts.titleDirty = false; refreshAll();
+  }});
 });
 
 /* ---------------- years / names ---------------- */

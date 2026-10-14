@@ -345,7 +345,7 @@ function sampleWeeks(){
   dates.forEach((d,i) => { w[d] = []; songs.forEach(([t,v]) => { if (v[i]) w[d].push({ t, a:"Laufey", n:v[i] }); }); });
   return w;
 }
-function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({weeks, ui, style})); }catch(e){} }
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({weeks, ui, style})); }catch(e){ const m = document.getElementById("loadMsg"); if (m) m.textContent = "This is too much to keep in your browser, so it won\u2019t be remembered next visit. Import fewer weeks or items."; } }
 function loadSaved(){
   try{
     const s = JSON.parse(localStorage.getItem(LS_KEY));

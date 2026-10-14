@@ -41,6 +41,13 @@ window.MUSIC_TOOLS = [
     alt: "Line graph of cumulative streams for several albums over time",
     desc: "Plot the running total of streams for several albums, artists or tracks by day, week, month or year, as lines or stacked areas."
   },
+  {
+    id: "spotify-library", name: "Spotify library", tag: "Import",
+    href: "spotify-library/index.html",
+    img: "assets/spotify-library-preview.png", w: 1000, h: 750,
+    alt: "The Spotify library page showing a saved play count, settings and a list of album editions to merge",
+    desc: "Add your Spotify history once, merge album editions like Fearless and Fearless (Platinum Edition), and use it in the graph, table and weekly chart tools."
+  },
 ];
 
 /* "Tools" menu next to the "All tools" link on each tool page. */
