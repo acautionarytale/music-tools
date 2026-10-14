@@ -21,6 +21,10 @@
   .card { background:var(--paper); border-radius:16px; padding:20px; margin-bottom:16px; }
   .card h2 { font-size:19px; margin:0 0 14px; }
   [hidden] { display:none !important; }
+  .mergebox { border-top:1px solid var(--line); margin-top:16px; padding-top:12px; }
+  .mergebox h3 { margin:0 0 4px; font-size:18px; }
+  .chiplist { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .rulechip { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:3px 4px 3px 12px; font-size:15px; background:var(--field); }
   .row { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:10px; }
   .row:last-child { margin-bottom:0; }
   label { font-size:15px; color:var(--muted); display:flex; align-items:center; gap:8px; }
@@ -188,6 +192,18 @@
       <div class="row" style="margin-top:10px">
         <input type="text" id="newName" placeholder="New name (album, artist or track)">
         <button class="alt small" id="addName">+ Add</button>
+      </div>
+      <div class="mergebox">
+        <h3>Merge duplicates</h3>
+        <p class="hint" style="margin:0 0 10px">Spotify counts different editions of the same album separately. Merging adds the first name's numbers into the second and removes it. The pairing is remembered, so later imports merge it automatically.</p>
+        <div class="row" id="mergeRow">
+          <label>Merge <select id="mergeFrom"></select></label>
+          <label>into <select id="mergeTo"></select></label>
+          <button class="alt small" id="mergeGo">Merge</button>
+          <span class="msg" id="mergeMsg"></span>
+        </div>
+        <div class="chiplist" id="mergeSugs" aria-label="Possible duplicates"></div>
+        <div class="chiplist" id="mergeRules" aria-label="Remembered merges"></div>
       </div>
       <p class="hint" id="entryHint">Enter total streams per month for the year chosen above, then switch years to fill in the rest. Blank counts as 0. Order the rows with &#9650;&#9660;. You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
     </details>
@@ -411,7 +427,7 @@ function loadSaved(){
       if (!vals){ vals = P.yearsToVals(s.state.years); grain = "month"; ws = 1; }   // older saves kept 12-month arrays per year
       if (!P.GRAINS.some(g=>g[0]===grain)) grain = "month";
       if (typeof ws !== "number") ws = 1;
-      state = { order:s.state.order, grain, ws, vals, sel:s.state.sel||{}, slots:s.state.slots||{}, colors:(s.state.colors && typeof s.state.colors==="object") ? s.state.colors : {} };
+      state = { order:s.state.order, grain, ws, vals, sel:s.state.sel||{}, slots:s.state.slots||{}, colors:(s.state.colors && typeof s.state.colors==="object") ? s.state.colors : {}, aliases:(s.state.aliases && typeof s.state.aliases==="object") ? s.state.aliases : {} };
       ui = Object.assign({ year:null, n:null, end:null, extra:[] }, s.ui||{}); if (!Array.isArray(ui.extra)) ui.extra = [];
       Object.assign(opts, s.opts||{}); return true;
     }
@@ -462,11 +478,12 @@ function ensureSel(){
   }
 }
 function addNames(names){ names.forEach(n => { if (!state.order.includes(n)) state.order.push(n); }); }
-const fresh = (grain="month", ws=1) => ({ order:[], grain, ws, vals:{}, sel:{}, slots:{}, colors:{} });
+const fresh = (grain="month", ws=1) => ({ order:[], grain, ws, vals:{}, sel:{}, slots:{}, colors:{}, aliases:{} });
 // Brings numbers { name: { key: streams } } in a given period into the graph. Returns an error message, or "" when it worked.
 function mergeData(order, vals, replace, g, ws){
   order = order.map(safeName);
   let src = {}; Object.keys(vals).forEach(k => { src[safeName(k)] = vals[k]; });
+  const keepAliases = state.aliases || {};   // merges made earlier are remembered
   if (replace) state = fresh(g, ws);
   else if (!hasValues()){ state.grain = g; state.ws = ws; }
   else if (g!==state.grain || (g==="week" && ws!==state.ws)){
@@ -474,6 +491,8 @@ function mergeData(order, vals, replace, g, ws){
       return `That data is ${P.ADJ[g]} but this graph is ${P.ADJ[state.grain]}, and it can't be split down. Tick "Replace existing data" to switch the graph to ${P.ADJ[g]}.`;
     src = P.rollVals(src, g, ws, state.grain, state.ws);
   }
+  state.aliases = Object.assign({}, keepAliases, state.aliases || {});
+  { const r = P.applyAliases(order, src, state.aliases); order = r.order; src = r.vals; }
   addNames(order);
   order.forEach(n => {
     if (!has(src, n)) return;
@@ -715,6 +734,38 @@ gridEl.addEventListener("paste", e=>{
   });
   persist(); renderGrid(); renderGraph();
 });
+
+/* ---------------- merge duplicates ---------------- */
+function doMerge(from, to){
+  if (!from || !to || from===to){ $("mergeMsg").textContent = "Pick two different names."; return; }
+  P.mergeRows(state, from, to);
+  delete state.sel[from]; delete state.slots[from]; if (state.colors) delete state.colors[from];
+  refreshAll(); $("mergeMsg").textContent = `Merged “${from}” into “${to}”.`;
+}
+function fillMerge(){
+  const names = state.order, from = $("mergeFrom"), to = $("mergeTo"), keepF = from.value, keepT = to.value;
+  const opts = names.map(n => `<option>${esc(n)}</option>`).join("");
+  from.innerHTML = opts; to.innerHTML = opts;
+  const sugs = P.dupSuggestions(names);
+  const f = names.includes(keepF) ? keepF : (sugs.length ? sugs[0][0] : names[names.length-1]);
+  from.value = f;
+  to.value = names.includes(keepT) && keepT!==f ? keepT : (P.guessTarget(f, names) || names.find(n => n!==f) || f);
+  $("mergeRow").hidden = names.length < 2;
+  const box = $("mergeSugs"); box.textContent = "";
+  sugs.slice(0,4).forEach(([a,b]) => {
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "alt small";
+    btn.textContent = `Merge “${a}” into “${b}”`; btn.addEventListener("click", () => doMerge(a, b)); box.appendChild(btn);
+  });
+  const rules = $("mergeRules"); rules.textContent = "";
+  Object.keys(state.aliases || {}).forEach(a => {
+    const chip = document.createElement("span"); chip.className = "rulechip"; chip.append(`${a} → ${state.aliases[a]}`);
+    const x = document.createElement("button"); x.type = "button"; x.className = "alt small"; x.textContent = "Forget"; x.title = "Stop merging this pair on future imports (numbers already merged stay merged)";
+    x.addEventListener("click", () => { delete state.aliases[a]; persist(); fillMerge(); $("mergeMsg").textContent = `Won't merge “${a}” on future imports.`; });
+    chip.appendChild(x); rules.appendChild(chip);
+  });
+}
+$("mergeFrom").addEventListener("change", () => { const g = P.guessTarget($("mergeFrom").value, state.order); if (g) $("mergeTo").value = g; });
+$("mergeGo").addEventListener("click", () => doMerge($("mergeFrom").value, $("mergeTo").value));
 
 /* ---------------- export ---------------- */
 function longRows(){
@@ -1220,7 +1271,7 @@ $("share").addEventListener("click", ()=>{
 });
 
 /* ---------------- wiring ---------------- */
-function refreshAll(){ fillYears(); fillGrain(); applyGrainText(); renderGrid(); persist(); renderGraph(); }
+function refreshAll(){ fillYears(); fillGrain(); applyGrainText(); renderGrid(); fillMerge(); persist(); renderGraph(); }
 if (!loadSaved()) state = sampleState();
 applyStyle(); buildStyleControls();
 fillImportArtists();

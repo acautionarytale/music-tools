@@ -21,6 +21,10 @@
   .card { background:var(--paper); border-radius:16px; padding:20px; margin-bottom:16px; }
   .card h2 { font-size:19px; margin:0 0 14px; }
   [hidden] { display:none !important; }
+  .mergebox { border-top:1px solid var(--line); margin-top:16px; padding-top:12px; }
+  .mergebox h3 { margin:0 0 4px; font-size:18px; }
+  .chiplist { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .rulechip { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:3px 4px 3px 12px; font-size:15px; background:var(--field); }
   .row { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:10px; }
   .row:last-child { margin-bottom:0; }
   label { font-size:15px; color:var(--muted); display:flex; align-items:center; gap:8px; }
@@ -155,6 +159,18 @@
       <div class="row" style="margin-top:10px">
         <input type="text" id="newAlbum">
         <button class="alt small" id="addAlbum"></button>
+      </div>
+      <div class="mergebox">
+        <h3>Merge duplicates</h3>
+        <p class="hint" id="mergeHint" style="margin:0 0 10px"></p>
+        <div class="row" id="mergeRow">
+          <label>Merge <select id="mergeFrom"></select></label>
+          <label>into <select id="mergeTo"></select></label>
+          <button class="alt small" id="mergeGo">Merge</button>
+          <span class="msg" id="mergeMsg"></span>
+        </div>
+        <div class="chiplist" id="mergeSugs" aria-label="Possible duplicates"></div>
+        <div class="chiplist" id="mergeRules" aria-label="Remembered merges"></div>
       </div>
       <p class="hint" id="entryHint">Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in "Entry order"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
     </details>
@@ -435,6 +451,8 @@ const cleanName = s => titleCase(String(s).split(" - ")[0].replace(/\.[^.]+$/,""
 // Brings a set of new numbers { grain, ws, artists:{ name:{ order, vals } } } into the table. Returns an error message, or "" when it worked.
 function mergeIn(inc, replace){
   let artists = inc.artists;
+  const keep = {};   // merges made earlier are remembered, so a fresh import merges the same pairs again
+  Object.keys(state.artists).forEach(a => { const al = state.artists[a].aliases; if (al && Object.keys(al).length) keep[a] = al; });
   if (replace){ state.artists = {}; state.grain = inc.grain; state.ws = inc.ws; ui.n = ui.end = null; }
   else if (!hasAnyValues()){ state.grain = inc.grain; state.ws = inc.ws; ui.n = ui.end = null; }
   else if (inc.grain!==state.grain || (inc.grain==="week" && inc.ws!==state.ws)){
@@ -444,7 +462,9 @@ function mergeIn(inc, replace){
     Object.keys(inc.artists).forEach(a => { artists[a] = { order:inc.artists[a].order, vals:P.rollVals(inc.artists[a].vals, inc.grain, inc.ws, state.grain, state.ws) }; });
   }
   Object.keys(artists).forEach(a => {
+    if (has(keep, a)){ const r = P.applyAliases(artists[a].order, artists[a].vals, keep[a]); artists[a] = { order:r.order, vals:r.vals }; }
     const art = (state.artists[a] ||= { order:[], vals:{} });
+    if (has(keep, a)) art.aliases = Object.assign({}, keep[a], art.aliases || {});
     artists[a].order.forEach(n => { if (!art.order.includes(n)) art.order.push(n); });
     Object.keys(artists[a].vals).forEach(n => { Object.assign(slotOf(art, n), artists[a].vals[n]); });
   });
@@ -531,7 +551,8 @@ function addAlbum(){
   art.order.push(n); slotOf(art, n); $("newAlbum").value=""; $("dataMsg").textContent=""; refreshAll();
 }
 $("spBtn").addEventListener("click", ()=>{
-  SpotifyImport.open({ mode:"table", kind, grain:state.grain, ws:state.ws, onImport:(res, msg)=>{
+  const aliases = {}; Object.keys(state.artists).forEach(a => { const al = state.artists[a].aliases; if (al && Object.keys(al).length) aliases[a] = al; });
+  SpotifyImport.open({ mode:"table", kind, grain:state.grain, ws:state.ws, aliases, onImport:(res, msg)=>{
     const err = mergeIn(res, $("replace").checked);
     $("loadMsg").textContent = err || msg; $("grainMsg").textContent = ""; refreshAll();
   }});
@@ -589,6 +610,39 @@ gridEl.addEventListener("paste", e=>{
   });
   fillSelectors(); persist(); renderGrid(); renderChart();
 });
+
+/* ---------------- merge duplicates ---------------- */
+function doMerge(from, to){
+  const art = getArt();
+  if (!from || !to || from===to){ $("mergeMsg").textContent = "Pick two different "+K().many+"."; return; }
+  P.mergeRows(art, from, to); refreshAll();
+  $("mergeMsg").textContent = `Merged “${from}” into “${to}”.`;
+}
+function fillMerge(){
+  const art = getArt(), names = art.order, from = $("mergeFrom"), to = $("mergeTo"), keepF = from.value, keepT = to.value;
+  $("mergeHint").textContent = `Spotify counts different editions of the same ${K().one} separately. Merging adds the first ${K().one}'s numbers into the second and removes it. The pairing is remembered, so later imports merge it automatically.`;
+  const opts = names.map(n => `<option>${esc(n)}</option>`).join("");
+  from.innerHTML = opts; to.innerHTML = opts;
+  const sugs = P.dupSuggestions(names);
+  const f = names.includes(keepF) ? keepF : (sugs.length ? sugs[0][0] : names[names.length-1]);
+  from.value = f;
+  to.value = names.includes(keepT) && keepT!==f ? keepT : (P.guessTarget(f, names) || names.find(n => n!==f) || f);
+  $("mergeRow").hidden = names.length < 2;
+  const box = $("mergeSugs"); box.textContent = "";
+  sugs.slice(0,4).forEach(([a,b]) => {
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "alt small";
+    btn.textContent = `Merge “${a}” into “${b}”`; btn.addEventListener("click", () => doMerge(a, b)); box.appendChild(btn);
+  });
+  const rules = $("mergeRules"); rules.textContent = "";
+  Object.keys(art.aliases || {}).forEach(a => {
+    const chip = document.createElement("span"); chip.className = "rulechip"; chip.append(`${a} → ${art.aliases[a]}`);
+    const x = document.createElement("button"); x.type = "button"; x.className = "alt small"; x.textContent = "Forget"; x.title = "Stop merging this pair on future imports (numbers already merged stay merged)";
+    x.addEventListener("click", () => { delete art.aliases[a]; persist(); fillMerge(); $("mergeMsg").textContent = `Won't merge “${a}” on future imports.`; });
+    chip.appendChild(x); rules.appendChild(chip);
+  });
+}
+$("mergeFrom").addEventListener("change", () => { const names = getArt().order, g = P.guessTarget($("mergeFrom").value, names); if (g) $("mergeTo").value = g; });
+$("mergeGo").addEventListener("click", () => doMerge($("mergeFrom").value, $("mergeTo").value));
 
 /* ---------------- export ---------------- */
 function longRows(){
@@ -897,7 +951,7 @@ function setKind(k){
   try{ const u = new URL(location.href); u.searchParams.set("kind", k); history.replaceState(null, "", u); }catch(e){}
   refreshAll();
 }
-function refreshAll(){ applyKindText(); fillSelectors(); applyGrainText(); renderGrid(); persist(); renderChart(); }
+function refreshAll(){ applyKindText(); fillSelectors(); applyGrainText(); renderGrid(); fillMerge(); persist(); renderChart(); }
 $("title").addEventListener("input", ()=>{ titleDirty=true; renderChart(); });
 $("autoTitle").addEventListener("click", ()=>{ titleDirty=false; renderChart(); });
 ["metric","showPct","showLast","lastDays","sort"].forEach(id=>{

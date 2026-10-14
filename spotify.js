@@ -3,7 +3,7 @@
    chart maker. Everything happens in the browser: the files you choose
    are read here and are never uploaded anywhere.
 
-   SpotifyImport.open({ mode:"table", kind:"albums"|"songs"|"artists", grain, ws, onImport(result, summary) })
+   SpotifyImport.open({ mode:"table", kind:"albums"|"songs"|"artists", grain, ws, aliases:{ artist:{ alias:target } }, onImport(result, summary) })
        result is { grain, ws, artists:{ name:{ order, vals } } }; needs periods.js
    SpotifyImport.open({ mode:"chart", weekStart, onImport(result, summary, { weekStart }) })
    ------------------------------------------------------------------ */
@@ -146,7 +146,17 @@
     var inRange = function (m) { return o.range === "all" ? true : o.range === "last12" ? m > maxM - 12 : (m >= +o.range * 12 && m < +o.range * 12 + 12); };
     var kind = o.kind, S = DB.strs, plays = 0;
     var groupOf = function (i) { return kind === "artists" ? 0 : DB.ar[i]; };
-    var itemOf = function (i) { return kind === "artists" ? DB.ar[i] : kind === "albums" ? DB.al[i] : DB.tr[i]; };
+    // names the user has merged before (for example two editions of one album) are counted as one
+    var redirect = new Map();
+    Object.keys(o.aliases || {}).forEach(function (an) {
+      var gi = kind === "artists" ? 0 : DB.map.get(an), al = o.aliases[an]; if (gi === undefined) return;
+      Object.keys(al).forEach(function (from) {
+        var fi = DB.map.get(from); if (fi === undefined) return;
+        redirect.set(gi * 4194304 + fi, intern(DB, P.canon(al, from)));
+      });
+    });
+    var rawItem = function (i) { return kind === "artists" ? DB.ar[i] : kind === "albums" ? DB.al[i] : DB.tr[i]; };
+    var itemOf = function (i) { var it = rawItem(i); if (it < 0 || !redirect.size) return it; var r = redirect.get(groupOf(i) * 4194304 + it); return r === undefined ? it : r; };
     var perArtist = new Map(), perItem = new Map();     // plays in the chosen range, used to rank
     for (i = 0; i < N; i++) {
       if (moA[i] === NONE || !inRange(moA[i])) continue;
@@ -322,7 +332,7 @@
         if (isTable) {
           if (kind === "albums" && !DB.hasAlbum) throw new Error("These files have no album names. Use the extended streaming history for albums, or switch to Songs or Artists.");
           var gsel = $("sp-grain").value;
-          r = tableAgg(Object.assign(base, { kind: kind, grain: gsel, ws: Number($("sp-ws").value), back: gsel === "day" || gsel === "week" ? Number($("sp-back").value) : 0, range: $("sp-range").value, n: Math.min(40, Math.max(1, Number($("sp-n").value) || 10)),
+          r = tableAgg(Object.assign(base, { kind: kind, grain: gsel, ws: Number($("sp-ws").value), back: gsel === "day" || gsel === "week" ? Number($("sp-back").value) : 0, aliases: cfg.aliases || {}, range: $("sp-range").value, n: Math.min(40, Math.max(1, Number($("sp-n").value) || 10)),
             artist: kind === "artists" ? "" : $("sp-artist").value, top5: kind !== "artists" && $("sp-top5").checked }));
         } else {
           var wstart = Number($("sp-wstart").value);

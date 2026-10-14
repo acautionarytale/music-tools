@@ -157,6 +157,57 @@
     return (names || Object.keys(vals)).some(function (n) { var m = Object.prototype.hasOwnProperty.call(vals, n) ? vals[n] : null; return m && Object.keys(m).some(function (k) { return m[k] != null; }); });
   };
 
+  /* ---- merging rows (for example two editions of one album) ---- */
+  // A merge is remembered as an alias { "Fearless (Platinum Edition)": "Fearless" }, so later imports merge the same pair again.
+  var own = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+  P.canon = function (aliases, n) { var g = 0; while (aliases && own(aliases, n) && g++ < 20) n = aliases[n]; return n; };
+  // Rewrites { order, vals } so every aliased name becomes its target and their numbers are added together.
+  P.applyAliases = function (order, vals, aliases) {
+    if (!aliases || !Object.keys(aliases).length) return { order: order, vals: vals };
+    var o2 = [], v2 = {};
+    order.forEach(function (n) { var c = P.canon(aliases, n); if (o2.indexOf(c) < 0) o2.push(c); });
+    Object.keys(vals).forEach(function (n) {
+      var c = P.canon(aliases, n), src = vals[n] || {}, dst = own(v2, c) ? v2[c] : (v2[c] = {});
+      Object.keys(src).forEach(function (k) { if (src[k] != null) dst[k] = (dst[k] || 0) + Number(src[k]); });
+    });
+    return { order: o2, vals: v2 };
+  };
+  // art is { order, vals, aliases? }. Adds row "from" into row "to", removes "from" and remembers the pairing.
+  P.mergeRows = function (art, from, to) {
+    if (from === to) return false;
+    var src = own(art.vals, from) ? art.vals[from] : null, dst = own(art.vals, to) ? art.vals[to] : (art.vals[to] = {});
+    if (src) Object.keys(src).forEach(function (k) { if (src[k] != null) dst[k] = (dst[k] || 0) + Number(src[k]); });
+    delete art.vals[from];
+    var i = art.order.indexOf(from); if (i >= 0) art.order.splice(i, 1);
+    if (art.order.indexOf(to) < 0) art.order.push(to);
+    var al = art.aliases || (art.aliases = {});
+    Object.keys(al).forEach(function (k) { if (al[k] === from) al[k] = to; });
+    al[from] = to;
+    return true;
+  };
+  // "Fearless (Platinum Edition)" and "Fearless" share a base name; "Fearless (Taylor's Version)" does not.
+  var EDITION = "deluxe|platinum|expanded|edition|bonus|remaster|anniversary|special|international|extended";
+  P.baseName = function (n) {
+    return String(n).replace(/\s*[\(\[][^\)\]]*[\)\]]/g, function (m) { return new RegExp(EDITION, "i").test(m) ? "" : m; })
+      .replace(new RegExp("\\s+[-–—]\\s+[^-–—]*(" + EDITION + ").*$", "i"), "").replace(/\s+/g, " ").trim().toLowerCase();
+  };
+  // pairs [from, to] that look like the same thing; the shortest name in each group is the target
+  P.dupSuggestions = function (names) {
+    var groups = Object.create(null), keys = [], out = [];
+    names.forEach(function (n) { var b = P.baseName(n); if (!b) return; if (!groups[b]) { groups[b] = []; keys.push(b); } groups[b].push(n); });
+    keys.forEach(function (b) {
+      var g = groups[b]; if (g.length < 2) return;
+      var t = g.slice().sort(function (x, y) { return x.length - y.length; })[0];
+      g.forEach(function (n) { if (n !== t) out.push([n, t]); });
+    });
+    return out;
+  };
+  P.guessTarget = function (name, names) {
+    var b = P.baseName(name), best = null;
+    names.forEach(function (n) { if (n !== name && P.baseName(n) === b && (best === null || n.length < best.length)) best = n; });
+    return best;
+  };
+
   /* ---- reading dates out of uploaded sheets ---- */
   // Returns { day, prec } where prec says how precise the cell was: "year", "month" or "day".
   P.parseWhen = function (v) {
