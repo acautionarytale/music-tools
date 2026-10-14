@@ -264,6 +264,7 @@
     <div class="row">
       <label><input type="checkbox" id="smooth"> Smooth curves</label>
       <label><input type="checkbox" id="fill"> Soft fill under lines</label>
+      <span class="msg" id="fillNote"></span>
     </div>
     <div class="style-group">
       <div class="msg" style="margin-bottom:6px">Lines shown (click a name to hide or show it, click its color dot to change its color)</div>
@@ -307,6 +308,7 @@ const canvas = $("cv"), ctx = canvas.getContext("2d"), S = 2;
 
 const has = (o, k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(o, k);
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
+const FILL_MAX = 6;    // soft fills pile up into bands when many lines overlap, so they are only drawn for a few lines
 const MAX_LINES = 40;   // lines that get their own color; any beyond this are combined into "Other"
 
 /* Style options. Add entries here and they appear as buttons automatically. */
@@ -1012,7 +1014,7 @@ function draw(model){
     });
   } else {
   // soft fills first, so every line stays on top
-  if (opts.fill){
+  if (opts.fill && model.series.length <= FILL_MAX){
     const alpha = Math.max(0.07, 0.3 * Math.min(1, 4/Math.max(1, model.series.length)));
     model.series.forEach(sr => {
       const g = ctx.createLinearGradient(0, plotT, 0, plotB);
@@ -1253,6 +1255,7 @@ function renderGraph(){
   if (!has(MODES, opts.mode)) opts.mode = "lines";
   const st = opts.mode !== "lines"; $("fill").disabled = st; $("showTotal").disabled = st;
   $("smooth").checked = opts.smooth !== false; $("fill").checked = opts.fill !== false;
+  $("fillNote").textContent = (opts.mode === "lines" && opts.fill !== false && model && model.series.length > FILL_MAX) ? `Fill is skipped with more than ${FILL_MAX} lines, because overlapping fills turn into bands. Hide a few lines to bring it back.` : "";
   renderPicks(model); renderTable(model);
   draw(model); paintStyleChips(); hideTip();
 }
