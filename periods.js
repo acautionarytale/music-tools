@@ -186,19 +186,60 @@
     return true;
   };
   // "Fearless (Platinum Edition)" and "Fearless" share a base name; "Fearless (Taylor's Version)" does not.
-  var EDITION = "deluxe|platinum|expanded|edition|bonus|remaster|anniversary|special|international|extended";
-  P.baseName = function (n) {
-    return String(n).replace(/\s*[\(\[][^\)\]]*[\)\]]/g, function (m) { return new RegExp(EDITION, "i").test(m) ? "" : m; })
-      .replace(new RegExp("\\s+[-–—]\\s+[^-–—]*(" + EDITION + ").*$", "i"), "").replace(/\s+/g, " ").trim().toLowerCase();
+  var ED = "deluxe|platinum|expanded|edition|bonus|remaster(?:ed)?|anniversary|special|international|extended|version|standard|explicit|clean|exclusive|tour|collector'?s|complete|digital|super|japan(?:ese)?|uk|us|european|reissue|re-?issue|apple music|limited|mono|stereo|radio edit|single version|album version";
+  var EDRE = new RegExp("\\b(?:" + ED + ")\\b", "i");
+  var OWNVER = /\b[\w]+['’]s version\b/i;           // "Taylor's Version" is a different recording, never an edition
+  var isEd = function (t) { return EDRE.test(t) && !OWNVER.test(t); };
+  var TRAIL = /(?:\s+(?:deluxe|platinum|expanded|special|international|extended|standard|anniversary|bonus|collector s|complete|digital|super|japan|japanese|uk|us|european|limited|tour|explicit|clean|exclusive|remastered|remaster)(?:\s+(?:edition|version|reissue|tracks?))*|\s+edition)+\s*$/;
+  var plain = function (t) {
+    t = String(t).normalize ? String(t).normalize("NFKD").replace(/[̀-ͯ]/g, "") : String(t);
+    return t.toLowerCase().replace(/&/g, " and ").replace(/['’`]/g, "'").replace(/[^a-z0-9'\s]/g, " ").replace(/'/g, " ").replace(/\s+/g, " ").trim();
   };
-  // pairs [from, to] that look like the same thing; the shortest name in each group is the target
+  P.baseName = function (n) {
+    var t = String(n);
+    t = t.replace(/\s*[\(\[][^\)\]]*[\)\]]/g, function (m) { return isEd(m) ? "" : m; });      // (Deluxe Edition), [Remastered 2009]
+    t = t.replace(/\s+[-–—]\s+(.*)$/, function (m, rest) { return isEd(rest) ? "" : m; });   // - Remastered 2011
+    var b = plain(t), c = b.replace(TRAIL, "");                                                  // "Fearless Platinum Edition"
+    return c && !/^(the|a|an)$/.test(c) ? c : b;
+  };
+  var lev = function (a, b) {
+    if (a === b) return 0; if (Math.abs(a.length - b.length) > 2) return 3;
+    var prev = [], i, j; for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) { var cur = [i]; for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+    return prev[b.length];
+  };
+  // "evermore" and "evermore the long version", or one-letter typos
+  var near = function (x, y) {
+    if (x === y || (/ s version\b/.test(x) !== / s version\b/.test(y))) return false;   // an own-version re-recording stays separate
+    var s1 = x.length <= y.length ? x : y, l1 = x.length <= y.length ? y : x;
+    if (s1.length >= 4 && l1.indexOf(s1 + " ") === 0) return true;
+    var d = lev(x, y); return (x.length >= 7 && d <= 1) || (x.length >= 12 && d <= 2);
+  };
+  // Groups of names that look like the same thing: [{ names, strong }]. strong = same base name; otherwise "maybe".
+  P.dupGroups = function (names) {
+    var base = names.map(P.baseName), par = names.map(function (_, i) { return i; });
+    var find = function (i) { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+    var join = function (i, j) { par[find(i)] = find(j); }, i, j, seen = Object.create(null);
+    for (i = 0; i < names.length; i++) { if (!base[i]) continue; if (seen[base[i]] !== undefined) join(i, seen[base[i]]); else seen[base[i]] = i; }
+    var uniq = Object.keys(seen);
+    for (i = 0; i < uniq.length; i++) for (j = i + 1; j < uniq.length; j++) if (near(uniq[i], uniq[j])) join(seen[uniq[i]], seen[uniq[j]]);
+    var by = Object.create(null), keys = [];
+    names.forEach(function (n, k) { var r = find(k); if (!by[r]) { by[r] = []; keys.push(r); } by[r].push(k); });
+    var out = [];
+    keys.forEach(function (r) {
+      var idx = by[r]; if (idx.length < 2) return;
+      var bs = {}; idx.forEach(function (k) { bs[base[k]] = 1; });
+      out.push({ names: idx.map(function (k) { return names[k]; }), strong: Object.keys(bs).length === 1 });
+    });
+    return out;
+  };
+  // pairs [from, to] that look like the same thing (clear matches only); the shortest name in each group is the target
   P.dupSuggestions = function (names) {
-    var groups = Object.create(null), keys = [], out = [];
-    names.forEach(function (n) { var b = P.baseName(n); if (!b) return; if (!groups[b]) { groups[b] = []; keys.push(b); } groups[b].push(n); });
-    keys.forEach(function (b) {
-      var g = groups[b]; if (g.length < 2) return;
-      var t = g.slice().sort(function (x, y) { return x.length - y.length; })[0];
-      g.forEach(function (n) { if (n !== t) out.push([n, t]); });
+    var out = [];
+    P.dupGroups(names).forEach(function (g) {
+      if (!g.strong) return;
+      var t = g.names.slice().sort(function (x, y) { return x.length - y.length; })[0];
+      g.names.forEach(function (n) { if (n !== t) out.push([n, t]); });
     });
     return out;
   };

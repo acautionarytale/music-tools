@@ -671,6 +671,7 @@ $("impGo").addEventListener("click", ()=>{
 });
 
 $("libGo").addEventListener("click", ()=>{
+  if (!window.SpotifyImport || !window.SpotifyImport.lib){ $("libMsg").textContent = "spotify.js on the site is out of date. Upload the newest one, then reload with Ctrl+Shift+R."; return; }
   window.SpotifyImport.open({ mode:"table", kind:$("libKind").value, grain:state.grain, ws:state.ws, allTime:true, single:true, aliases:{}, onImport:(result, summary)=>{
     const names = Object.keys(result.artists), grp = names.length && result.artists[names[0]];
     if (!grp || !grp.order.length){ $("libMsg").textContent = "Nothing came back for those choices."; return; }

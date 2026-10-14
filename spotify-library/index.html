@@ -118,6 +118,29 @@
   h3 { font-size:17px; margin:18px 0 6px; }
   select.wide { max-width:min(420px, 100%); }
   #artistIn { width:260px; }
+  .tiles { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:flex-start; }
+  .tilebox { position:relative; width:190px; }
+  .tile { all:unset; box-sizing:border-box; display:flex; flex-direction:column; gap:3px; width:100%; min-height:84px; cursor:pointer; padding:10px 12px; border:1.5px solid var(--line); border-radius:12px; background:var(--field); color:var(--ink); font-size:15px; line-height:1.3; }
+  .tile:hover { background:var(--soft); }
+  .tile:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+  .tile.on { border-color:var(--ink); box-shadow:0 0 0 1.5px var(--ink); background:var(--soft); }
+  .tile .tn { font-weight:700; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .tile .tp { color:var(--muted); font-size:14px; }
+  .tile .tm { color:var(--muted); font-size:13px; font-style:italic; overflow-wrap:anywhere; }
+  .tile.on::after { content:"\2713"; position:absolute; top:6px; right:8px; font-weight:700; }
+  .tilebox.merged .tile { border-style:double; border-width:4px; }
+  .tilebox .split { position:absolute; bottom:6px; right:6px; padding:1px 8px; font-size:12px; border-radius:999px; }
+  .cluster { display:flex; flex-wrap:wrap; gap:8px; padding:8px; border:2px dashed var(--ink); border-radius:16px; align-items:flex-start; }
+  .cluster.maybe { border-color:var(--line); }
+  .cluster .ch { flex:1 0 100%; display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:14px; color:var(--muted); font-style:italic; }
+  .selbar { position:sticky; bottom:12px; margin-top:14px; display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; padding:10px 14px; border:1px solid var(--ink); border-radius:14px; background:var(--paper); box-shadow:0 8px 24px var(--shadow); z-index:5; }
+  .selbar button { padding:8px 16px; font-size:16px; }
+  .scanbox { margin-top:16px; border-top:1px solid var(--line); padding-top:12px; }
+  .scanbox > summary { font-size:16px; margin-bottom:10px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 6px; }
+  .chip { font:inherit; font-size:14px; font-weight:400; padding:4px 12px; border-radius:999px; border:1px solid var(--line); background:var(--field); color:var(--ink); cursor:pointer; }
+  .chip:hover { background:var(--soft); }
+  .chip[aria-pressed="true"] { border-color:var(--ink); font-weight:700; }
 </style>
 </head>
 <body>
@@ -155,26 +178,37 @@
 
   <div class="card">
     <h2>3. Merge editions and duplicates</h2>
-    <p class="msg" style="margin-top:0">Spotify lists each edition as its own album, like “Fearless” and “Fearless (Platinum Edition)”. Merge them here once and every tool counts them together. Your saved plays are never changed, and you can undo any merge.</p>
+    <p class="msg" style="margin-top:0">Spotify lists each edition as its own album, like “Fearless” and “Fearless (Platinum Edition)”. Pick an artist, tap the tiles that are the same thing, then press Merge. Every tool counts them together afterwards. Your saved plays are never changed, and you can split any merge.</p>
     <div class="row">
       <label>Merge <select id="kind"><option value="albums">albums</option><option value="songs">songs</option></select></label>
-      <button class="alt small" id="scan">Find likely duplicates</button>
-      <span class="msg" id="scanMsg"></span>
+      <label>Artist <input type="text" id="artistIn" list="artistList" placeholder="Type or pick an artist" autocomplete="off"></label><datalist id="artistList"></datalist>
     </div>
-    <div id="sugWrap" hidden>
-      <div class="sugs" id="sugs"></div>
-      <div class="row"><button class="small" id="mergeAll">Merge all of these</button><span class="msg" id="sugMsg"></span></div>
+    <div class="chips" id="artistChips" aria-label="Your top artists"></div>
+    <div class="msg" id="tileMsg" aria-live="polite"></div>
+    <div id="tileArea" hidden>
+      <div class="row" style="margin-top:12px">
+        <span class="msg" id="tileSum"></span>
+        <button class="alt small" id="mergeLikely" hidden>Merge all clear matches</button>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="selbar" id="selbar" hidden>
+        <span id="selN"></span>
+        <label>Keep the name <select id="keepName" class="wide"></select></label>
+        <button id="mergeSel">Merge</button>
+        <button class="alt" id="clearSel" type="button">Clear</button>
+      </div>
     </div>
-    <h3>Or merge two yourself</h3>
-    <div class="row">
-      <label>Artist <input type="text" id="artistIn" list="artistList" placeholder="Artist name" autocomplete="off"></label><datalist id="artistList"></datalist>
-    </div>
-    <div class="row">
-      <label>Merge <select id="from" class="wide"></select></label>
-      <label>into <select id="to" class="wide"></select></label>
-      <button class="alt small" id="mergeGo">Merge</button>
-    </div>
-    <div class="msg" id="mergeMsg"></div>
+    <details class="scanbox">
+      <summary>Find duplicates across all artists</summary>
+      <div class="row">
+        <button class="alt small" id="scan">Find clear matches</button>
+        <span class="msg" id="scanMsg"></span>
+      </div>
+      <div id="sugWrap" hidden>
+        <div class="sugs" id="sugs"></div>
+        <div class="row"><button class="small" id="mergeAll">Merge all of these</button><span class="msg" id="sugMsg"></span></div>
+      </div>
+    </details>
     <h3>Merges you've made</h3>
     <div class="rules" id="rules"></div>
     <div class="msg" id="rulesMsg"></div>
@@ -194,12 +228,17 @@
 <script src="../spotify.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const LIB = window.SpotifyImport.lib, P = window.Periods;
+const LIB = window.SpotifyImport && window.SpotifyImport.lib, P = window.Periods;
+if (!LIB || !P || !P.dupGroups){
+  document.getElementById("stat").textContent = "Some site files are out of date.";
+  document.getElementById("statSub").textContent = "Upload the newest spotify.js and periods.js (in the main folder) to GitHub, then reload this page with Ctrl+Shift+R (Cmd+Shift+R on a Mac). GitHub Pages can also take a few minutes to update.";
+  throw new Error("spotify.js or periods.js is out of date");
+}
 const fmt = n => Number(n).toLocaleString("en-US");
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const mon = t => { const d = new Date(t); return MON[d.getUTCMonth()] + " " + d.getUTCFullYear(); };
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-let kind = "albums", sugList = [], items = [];
+let kind = "albums", sugList = [];
 
 /* ---- history ---- */
 function renderStatus(){
@@ -239,7 +278,7 @@ $("clear").addEventListener("click", async () => {
   try { await LIB.clear(); $("addMsg").textContent = "Saved history deleted."; } catch (e){ $("addMsg").textContent = e.message; }
   afterHistory();
 });
-function afterHistory(){ renderStatus(); fillArtists(); clearScan(); fillItems(); }
+function afterHistory(){ renderStatus(); fillArtists(); clearScan(); renderTiles(); }
 
 /* ---- settings ---- */
 function fillSettings(){
@@ -249,43 +288,123 @@ function fillSettings(){
 }
 function saveSettings(){
   const L = LIB.get(); L.tz = $("tz").value; L.minSec = Math.max(0, Number($("sec").value) || 0); LIB.set(L);
-  clearScan(); fillItems();
+  clearScan(); renderTiles();
 }
 $("tz").addEventListener("change", saveSettings); $("sec").addEventListener("change", saveSettings);
 
 /* ---- merges ---- */
-function rulesFor(){ return LIB.get().rules[kind] || {}; }
+let artist = "", tiles = [];
+const sel = new Set();
+const rulesFor = () => LIB.get().rules[kind] || {};
 function clearScan(){ sugList = []; $("sugWrap").hidden = true; $("scanMsg").textContent = ""; }
 function fillArtists(){
-  $("artistList").innerHTML = LIB.artists(300).map(a => `<option value="${esc(a.name)}">`).join("");
+  const top = LIB.artists(300);
+  $("artistList").innerHTML = top.map(a => `<option value="${esc(a.name)}">`).join("");
+  const box = $("artistChips"); box.innerHTML = "";
+  top.slice(0, 12).forEach(a => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = a.name;
+    b.setAttribute("aria-pressed", String(a.name === artist));
+    b.addEventListener("click", () => { $("artistIn").value = a.name; setArtist(a.name); });
+    box.appendChild(b);
+  });
 }
-function mergeAway(artist){ return new Set(Object.keys(rulesFor()[artist] || {})); }
-function fillItems(){
-  const artist = $("artistIn").value.trim(), gone = mergeAway(artist);
-  items = artist ? LIB.items(artist, kind).filter(i => !gone.has(i.name)) : [];
-  const opt = i => `<option value="${esc(i.name)}">${esc(i.name)} (${fmt(i.plays)})</option>`;
-  $("from").innerHTML = items.length ? items.map(opt).join("") : `<option value="">${artist ? "(nothing found for that artist)" : "(choose an artist)"}</option>`;
-  $("to").innerHTML = $("from").innerHTML;
-  guessTo();
+function setArtist(a){ artist = a.trim(); sel.clear(); fillArtists(); renderTiles(); }
+$("artistIn").addEventListener("change", () => setArtist($("artistIn").value));
+$("kind").addEventListener("change", () => { kind = $("kind").value; sel.clear(); clearScan(); renderTiles(); renderRules(); });
+
+function buildTiles(){
+  const R = rulesFor()[artist] || {}, by = new Map();
+  LIB.items(artist, kind).forEach(i => {
+    const c = LIB.canon(R, i.name); let t = by.get(c);
+    if (!t){ t = { name: c, plays: 0, members: [] }; by.set(c, t); }
+    t.plays += i.plays; if (i.name !== c) t.members.push(i);
+  });
+  tiles = [...by.values()].sort((a, b) => b.plays - a.plays);
 }
-function guessTo(){
-  const f = $("from").value, g = f && P.guessTarget(f, items.map(i => i.name));
-  if (g) $("to").value = g; else if (items.length > 1) $("to").selectedIndex = $("from").selectedIndex === 0 ? 1 : 0;
+function renderTiles(){
+  const area = $("tileArea"), box = $("tiles"); box.innerHTML = "";
+  $("tileMsg").textContent = "";
+  if (!artist){ area.hidden = true; $("tileMsg").textContent = LIB.status() ? "Choose an artist above to see their " + kind + "." : "Add your history first."; return; }
+  buildTiles();
+  if (!tiles.length){ area.hidden = true; $("tileMsg").textContent = `No ${kind} found for “${artist}”.` + (kind === "albums" && LIB.status() && !LIB.status().hasAlbum ? " Your files have no album names (account data only)." : ""); return; }
+  area.hidden = false;
+  const names = tiles.map(t => t.name), byName = new Map(tiles.map(t => [t.name, t]));
+  const groups = P.dupGroups(names), inGroup = new Map();
+  groups.forEach(g => g.names.forEach(n => inGroup.set(n, g)));
+  const done = new Set();
+  tiles.forEach(t => {
+    const g = inGroup.get(t.name);
+    if (!g){ box.appendChild(tileEl(t)); return; }
+    if (done.has(g)) return; done.add(g);
+    const c = document.createElement("div"); c.className = "cluster" + (g.strong ? "" : " maybe");
+    const head = document.createElement("div"); head.className = "ch";
+    head.append(g.strong ? "Looks like the same thing" : "Maybe related");
+    const pick = document.createElement("button"); pick.type = "button"; pick.className = "alt small"; pick.textContent = "Select these";
+    pick.addEventListener("click", () => { g.names.forEach(n => sel.add(n)); renderTiles(); });
+    head.appendChild(pick); c.appendChild(head);
+    g.names.sort((x, y) => byName.get(y).plays - byName.get(x).plays).forEach(n => c.appendChild(tileEl(byName.get(n))));
+    box.appendChild(c);
+  });
+  const clear = groups.filter(g => g.strong).length;
+  $("mergeLikely").hidden = !clear; $("mergeLikely").textContent = `Merge all clear matches (${clear})`;
+  const merged = tiles.filter(t => t.members.length).length;
+  $("tileSum").textContent = `${fmt(tiles.length)} ${kind}` + (clear ? ` · ${clear} group${clear === 1 ? "" : "s"} that look the same` : "") + (merged ? ` · ${merged} merged` : "") + ". Tap tiles to select.";
+  renderSel();
 }
-$("artistIn").addEventListener("change", fillItems);
-$("from").addEventListener("change", guessTo);
-$("kind").addEventListener("change", () => { kind = $("kind").value; clearScan(); fillItems(); renderRules(); });
-function doMerge(L, artist, from, to){ return LIB.addRule(L, kind, artist, from, to); }
-$("mergeGo").addEventListener("click", () => {
-  const artist = $("artistIn").value.trim(), from = $("from").value, to = $("to").value;
-  if (!artist || !from || !to){ $("mergeMsg").textContent = "Choose an artist and two different " + kind + "."; return; }
-  if (from === to){ $("mergeMsg").textContent = "Choose two different " + kind + "."; return; }
-  const L = LIB.get();
-  if (!doMerge(L, artist, from, to)){ $("mergeMsg").textContent = "Those are already merged the other way round."; return; }
-  LIB.set(L);
-  $("mergeMsg").textContent = `“${from}” now counts as “${to}” in every tool. Pull again in a tool to see it.`;
-  fillItems(); renderRules(); clearScan();
+function tileEl(t){
+  const wrap = document.createElement("div"); wrap.className = "tilebox" + (t.members.length ? " merged" : "");
+  const b = document.createElement("button"); b.type = "button"; b.className = "tile" + (sel.has(t.name) ? " on" : "");
+  b.setAttribute("aria-pressed", String(sel.has(t.name)));
+  b.innerHTML = `<span class="tn">${esc(t.name)}</span><span class="tp">${fmt(t.plays)} plays</span>` + (t.members.length ? `<span class="tm">includes ${t.members.map(m => esc(m.name)).join(", ")}</span>` : "");
+  b.addEventListener("click", () => { sel.has(t.name) ? sel.delete(t.name) : sel.add(t.name); b.classList.toggle("on", sel.has(t.name)); b.setAttribute("aria-pressed", String(sel.has(t.name))); renderSel(); });
+  wrap.appendChild(b);
+  if (t.members.length){
+    const x = document.createElement("button"); x.type = "button"; x.className = "alt small split"; x.textContent = "Split"; x.setAttribute("aria-label", `Split ${t.name} back into its editions`);
+    x.addEventListener("click", () => {
+      const L = LIB.get(), R = L.rules[kind][artist] || {};
+      Object.keys(R).filter(k => LIB.canon(R, k) === t.name).forEach(k => LIB.removeRule(L, kind, artist, k));
+      LIB.set(L); sel.delete(t.name); renderTiles(); renderRules(); $("tileMsg").textContent = `“${t.name}” is split back into its editions.`;
+    });
+    wrap.appendChild(x);
+  }
+  return wrap;
+}
+function renderSel(){
+  const chosen = tiles.filter(t => sel.has(t.name)); const names = chosen.map(t => t.name);
+  [...sel].forEach(n => { if (!names.includes(n)) sel.delete(n); });
+  $("selbar").hidden = !chosen.length;
+  $("selN").textContent = chosen.length + " selected";
+  $("mergeSel").disabled = chosen.length < 2;
+  const keep = $("keepName"), cur = keep.value;
+  keep.innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  const sameBase = new Set(names.map(n => P.baseName(n))).size === 1;   // editions: the plainest name; otherwise the most played
+  const guess = (sameBase ? names.slice().sort((x, y) => x.length - y.length) : chosen.slice().sort((x, y) => y.plays - x.plays).map(t => t.name))[0];
+  if (!names.length) keepTouched = false;
+  keep.value = keepTouched && names.includes(cur) ? cur : (guess || "");   // the suggested name follows the selection until you pick one yourself
+}
+let keepTouched = false;
+$("keepName").addEventListener("change", () => { keepTouched = true; });
+$("mergeSel").addEventListener("click", () => {
+  const names = tiles.filter(t => sel.has(t.name)).map(t => t.name), keep = $("keepName").value;
+  if (names.length < 2 || !names.includes(keep)) return;
+  const L = LIB.get(); let n = 0;
+  names.forEach(x => { if (x !== keep && LIB.addRule(L, kind, artist, x, keep)) n++; });
+  LIB.set(L); sel.clear(); keepTouched = false;
+  renderTiles(); renderRules(); clearScan();
+  $("tileMsg").textContent = n ? `Merged ${names.length} ${kind} into “${keep}”. Every tool counts them together; pull again in a tool to see it.` : "Those are already merged.";
 });
+$("clearSel").addEventListener("click", () => { sel.clear(); keepTouched = false; renderTiles(); });
+$("mergeLikely").addEventListener("click", () => {
+  const L = LIB.get(); let groups = 0;
+  P.dupGroups(tiles.map(t => t.name)).filter(g => g.strong).forEach(g => {
+    const keep = g.names.slice().sort((x, y) => x.length - y.length)[0]; let did = false;
+    g.names.forEach(x => { if (x !== keep && LIB.addRule(L, kind, artist, x, keep)) did = true; });
+    if (did) groups++;
+  });
+  LIB.set(L); sel.clear(); renderTiles(); renderRules(); clearScan(); $("tileMsg").textContent = `Merged ${groups} group${groups === 1 ? "" : "s"}. Split any of them with the Split button.`;
+});
+
+/* ---- find clear matches across every artist ---- */
 $("scan").addEventListener("click", () => {
   if (!LIB.status()){ $("scanMsg").textContent = "Add your history first."; return; }
   $("scanMsg").textContent = "Looking…";
@@ -303,20 +422,20 @@ $("scan").addEventListener("click", () => {
 function renderSugs(){
   const box = $("sugs"); box.innerHTML = "";
   $("sugWrap").hidden = !sugList.length;
-  $("scanMsg").textContent = sugList.length ? `Found ${fmt(sugList.length)} likely duplicate${sugList.length === 1 ? "" : "s"}.` : "No likely duplicates found.";
+  $("scanMsg").textContent = sugList.length ? `Found ${fmt(sugList.length)} clear match${sugList.length === 1 ? "" : "es"}.` : "No clear matches found.";
   $("sugMsg").textContent = "";
-  sugList.slice(0, 200).forEach((s, i) => {
+  sugList.slice(0, 200).forEach(s => {
     const row = document.createElement("div"); row.className = "sug";
     row.innerHTML = `<div class="who"><b>${esc(s.artist)}</b><br>${esc(s.from)} <span class="n">(${fmt(s.fp)})</span> → ${esc(s.to)} <span class="n">(${fmt(s.tp)})</span></div>`;
     const b = document.createElement("button"); b.className = "alt small"; b.textContent = "Merge";
-    b.addEventListener("click", () => { const L = LIB.get(); doMerge(L, s.artist, s.from, s.to); LIB.set(L); sugList.splice(sugList.indexOf(s), 1); renderSugs(); renderRules(); fillItems(); });
+    b.addEventListener("click", () => { const L = LIB.get(); LIB.addRule(L, kind, s.artist, s.from, s.to); LIB.set(L); sugList.splice(sugList.indexOf(s), 1); renderSugs(); renderRules(); renderTiles(); });
     row.appendChild(b); box.appendChild(row);
   });
   if (sugList.length > 200) { const m = document.createElement("div"); m.className = "msg"; m.style.padding = "8px 0"; m.textContent = `Showing the 200 most played. “Merge all” covers all ${fmt(sugList.length)}.`; box.appendChild(m); }
 }
 $("mergeAll").addEventListener("click", () => {
-  const L = LIB.get(); let n = 0; sugList.forEach(s => { if (doMerge(L, s.artist, s.from, s.to)) n++; });
-  LIB.set(L); sugList = []; renderSugs(); $("scanMsg").textContent = ""; $("sugMsg").textContent = ""; $("rulesMsg").textContent = `Merged ${fmt(n)}. You can undo any of them below.`; renderRules(); fillItems();
+  const L = LIB.get(); let n = 0; sugList.forEach(s => { if (LIB.addRule(L, kind, s.artist, s.from, s.to)) n++; });
+  LIB.set(L); sugList = []; renderSugs(); $("scanMsg").textContent = ""; $("rulesMsg").textContent = `Merged ${fmt(n)}. You can undo any of them below or with Split on a tile.`; renderRules(); renderTiles();
 });
 function renderRules(){
   const R = LIB.get().rules[kind] || {}, box = $("rules"); box.innerHTML = "";
@@ -326,7 +445,7 @@ function renderRules(){
     const chip = document.createElement("span"); chip.className = "rulechip";
     chip.append(`${a}: ${f} → ${R[a][f]}`);
     const x = document.createElement("button"); x.className = "alt small"; x.textContent = "Undo"; x.setAttribute("aria-label", `Undo merging ${f}`);
-    x.addEventListener("click", () => { const L = LIB.get(); LIB.removeRule(L, kind, a, f); LIB.set(L); $("rulesMsg").textContent = `“${f}” is counted on its own again.`; renderRules(); fillItems(); });
+    x.addEventListener("click", () => { const L = LIB.get(); LIB.removeRule(L, kind, a, f); LIB.set(L); $("rulesMsg").textContent = `“${f}” is counted on its own again.`; renderRules(); renderTiles(); });
     chip.appendChild(x); box.appendChild(chip);
   }));
 }
@@ -346,7 +465,7 @@ function migrate(){
 
 (async function(){
   await LIB.ready();
-  migrate(); fillSettings(); renderStatus(); fillArtists(); renderRules(); fillItems();
+  migrate(); fillSettings(); renderStatus(); fillArtists(); renderRules(); renderTiles();
   if (!LIB.storeOk()) $("histHint").textContent = "This browser can't keep saved data here (private browsing can cause this), so your history will only last while this page is open.";
 })();
 </script>
