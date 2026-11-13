@@ -44,13 +44,13 @@
   /* streams table: a colored grid with a percent sticker */
   var cells = [['p3', '+12'], ['p1', '-4'], ['p3', '+22'], ['p1', '-9'], ['p1', '-6'], ['p3', '+8'], ['p1', '-3'], ['p3', '+31'], ['p3', '+5'], ['p3', '+17'], ['p1', '-12'], ['p1', '-2']], g = '';
   cells.forEach(function (c, i) {
-    var x = 62 + (i % 4) * 66, y = 98 + Math.floor(i / 4) * 42;
+    var x = 64 + (i % 4) * 66, y = 90 + Math.floor(i / 4) * 42;
     g += '<rect x="' + x + '" y="' + y + '" width="58" height="34" rx="9" class="' + c[0] + ' o2"/><text x="' + (x + 29) + '" y="' + (y + 23) + '" text-anchor="middle" class="tx td">' + c[1] + '%</text>';
   });
   A['streams-table'] = head('d',
     '<rect x="58" y="62" width="284" height="176" rx="16" class="sh" transform="translate(7 -1)"/><rect x="50" y="48" width="284" height="176" rx="16" class="pp o"/>' +
-    '<rect x="62" y="62" width="58" height="14" rx="7" class="p2 o2"/><rect x="128" y="66" width="40" height="7" rx="3.5" class="soft"/><rect x="194" y="66" width="40" height="7" rx="3.5" class="soft"/><rect x="260" y="66" width="40" height="7" rx="3.5" class="soft"/>' +
-    g + '<circle cx="346" cy="204" r="32" class="sh" transform="translate(4 4)"/><circle cx="346" cy="204" r="32" class="p2 o"/><text x="346" y="218" text-anchor="middle" class="disp td" font-size="40" transform="rotate(10 346 204)">%</text>');
+    '<rect x="64" y="62" width="58" height="14" rx="7" class="p2 o2"/><rect x="139" y="66" width="40" height="7" rx="3.5" class="soft"/><rect x="205" y="66" width="40" height="7" rx="3.5" class="soft"/><rect x="271" y="66" width="40" height="7" rx="3.5" class="soft"/>' +
+    g + '<circle cx="358" cy="208" r="30" class="sh" transform="translate(4 4)"/><circle cx="358" cy="208" r="30" class="p2 o"/><text x="358" y="221" text-anchor="middle" class="disp td" font-size="38" transform="rotate(10 358 208)">%</text>');
 
   /* cumulative graph: sunset, rising lines, outlined dots */
   var sun = '', cols = ['#FFC93C', '#FF7A45', '#FF3E8E'];

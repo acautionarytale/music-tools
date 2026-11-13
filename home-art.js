@@ -38,11 +38,11 @@
 
   /* streams table */
   var up = '#B8DAB0', dn = '#F1B3AE', vals = [[up, '+12'], [dn, '-4'], [up, '+22'], [dn, '-9'], [dn, '-6'], [up, '+8'], [dn, '-3'], [up, '+31'], [up, '+5'], [up, '+17'], [dn, '-12'], [dn, '-2']], g = '';
-  vals.forEach(function (v, i) { var x = 76 + (i % 4) * 62, y = 96 + Math.floor(i / 4) * 40; g += '<rect x="' + x + '" y="' + y + '" width="54" height="32" rx="9" fill="' + v[0] + '"/><text x="' + (x + 27) + '" y="' + (y + 21) + '" text-anchor="middle" class="ser" font-size="15" font-weight="700" fill="#3F3532">' + v[1] + '%</text>'; });
+  vals.forEach(function (v, i) { var x = 76 + (i % 4) * 65, y = 94 + Math.floor(i / 4) * 38; g += '<rect x="' + x + '" y="' + y + '" width="57" height="32" rx="9" fill="' + v[0] + '"/><text x="' + (x + 28.5) + '" y="' + (y + 21) + '" text-anchor="middle" class="ser" font-size="15" font-weight="700" fill="#3F3532">' + v[1] + '%</text>'; });
   A['streams-table'] = wrap('d',
     '<g class="lift"><rect x="56" y="46" width="292" height="176" rx="18" class="pan edge"/>' +
-    '<rect x="76" y="64" width="62" height="10" rx="5" fill="#F4D3A4"/><rect x="146" y="66" width="38" height="6" rx="3" class="mut"/><rect x="208" y="66" width="38" height="6" rx="3" class="mut"/><rect x="270" y="66" width="38" height="6" rx="3" class="mut"/>' +
-    '<rect x="76" y="82" width="250" height="1.5" class="rule"/>' + g + '</g>');
+    '<rect x="76" y="64" width="57" height="10" rx="5" fill="#F4D3A4"/><rect x="150" y="66" width="38" height="6" rx="3" class="mut"/><rect x="215" y="66" width="38" height="6" rx="3" class="mut"/><rect x="280" y="66" width="38" height="6" rx="3" class="mut"/>' +
+    '<rect x="76" y="82" width="252" height="1.5" class="rule"/>' + g + '</g>');
 
   /* cumulative graph */
   A['cumulative-streams'] = wrap('e',
