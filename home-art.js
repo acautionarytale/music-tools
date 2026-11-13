@@ -11,7 +11,7 @@
   A['album-rating'] = wrap('a',
     '<g class="lift"><rect x="62" y="52" width="276" height="166" rx="18" class="pan edge"/>' +
     '<rect x="78" y="68" width="76" height="76" rx="12" class="soft"/>' + t +
-    '<text x="174" y="92" class="ser ink" font-size="18" font-weight="700">Typical of Me</text><rect x="174" y="102" width="70" height="6" rx="3" class="mut"/>' +
+    '<text x="174" y="92" class="ser ink" font-size="18" font-weight="700" textLength="100" lengthAdjust="spacingAndGlyphs">Typical of Me</text><rect x="174" y="102" width="70" height="6" rx="3" class="mut"/>' +
     '<circle cx="308" cy="100" r="24" fill="#B8DAB0"/><text x="308" y="108" text-anchor="middle" class="ser" font-size="22" font-weight="700" fill="#3F3532">8.2</text>' +
     '<g transform="translate(-6 28)">' + bar(130, 120, '#A5D3B5') + bar(150, 96, '#CDE0AA') + bar(170, 130, '#92CBB4') + '</g>' +
     '<g class="mut"><rect x="86" y="168" width="40" height="6" rx="3"/><rect x="86" y="184" width="30" height="6" rx="3"/></g></g>' +
@@ -19,11 +19,11 @@
 
   /* song sorter */
   A['song-sorter'] = wrap('b',
-    '<g class="lift"><rect x="40" y="70" width="140" height="120" rx="18" class="pan edge"/><rect x="40" y="70" width="140" height="26" rx="18" fill="#E8A3A0" opacity=".9"/><rect x="40" y="86" width="140" height="10" fill="#E8A3A0" opacity=".9"/>' +
+    '<g class="lift"><rect x="40" y="66" width="140" height="124" rx="18" class="pan edge"/><path d="M40 84a18 18 0 0 1 18-18h104a18 18 0 0 1 18 18v10H40z" fill="#E8A3A0"/>' +
     '<text x="110" y="158" text-anchor="middle" class="ser ink" font-size="52" font-style="italic">A</text><rect x="64" y="170" width="92" height="7" rx="3.5" class="mut"/></g>' +
-    '<g class="lift"><rect x="220" y="60" width="140" height="130" rx="18" class="pan edge" style="stroke:#92CBB4;stroke-width:2.5"/><rect x="220" y="60" width="140" height="26" rx="18" fill="#92CBB4"/><rect x="220" y="76" width="140" height="10" fill="#92CBB4"/>' +
-    '<text x="290" y="154" text-anchor="middle" class="ser ink" font-size="52" font-style="italic">B</text><rect x="244" y="168" width="92" height="7" rx="3.5" class="mut"/>' +
-    '<circle cx="344" cy="64" r="15" fill="#92CBB4" stroke="var(--panel)" stroke-width="3"/><path d="M337 64l5 5 9-10" fill="none" stroke="#3F3532" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>' +
+    '<g class="lift"><rect x="220" y="66" width="140" height="124" rx="18" class="pan edge" style="stroke:#92CBB4;stroke-width:2.5"/><path d="M220 84a18 18 0 0 1 18-18h104a18 18 0 0 1 18 18v10H220z" fill="#92CBB4"/>' +
+    '<text x="290" y="158" text-anchor="middle" class="ser ink" font-size="52" font-style="italic">B</text><rect x="244" y="170" width="92" height="7" rx="3.5" class="mut"/>' +
+    '<circle cx="344" cy="66" r="15" fill="#92CBB4" stroke="var(--panel)" stroke-width="3"/><path d="M337 66l5 5 9-10" fill="none" stroke="#3F3532" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>' +
     '<circle cx="200" cy="130" r="20" class="pan edge"/><text x="200" y="136" text-anchor="middle" class="ser mutf" font-size="16" font-style="italic">or</text>');
 
   /* personal chart */
@@ -53,12 +53,13 @@
     '<g fill="none" stroke-linecap="round"><path d="M64 196C120 188 160 168 200 140S290 96 336 66" stroke="#8CB8D9" stroke-width="4.5"/><path d="M64 196C130 192 180 182 230 164S300 138 336 124" stroke="#E8A3A0" stroke-width="4.5"/><path d="M64 196C140 194 200 190 260 180S316 172 336 168" stroke="#92CBB4" stroke-width="4.5"/></g>' +
     '<g><circle cx="336" cy="66" r="12" fill="#8CB8D9" opacity=".3"/><circle cx="336" cy="66" r="7" class="panf"/><circle cx="336" cy="66" r="4.5" fill="#8CB8D9"/><circle cx="336" cy="124" r="12" fill="#E8A3A0" opacity=".3"/><circle cx="336" cy="124" r="7" class="panf"/><circle cx="336" cy="124" r="4.5" fill="#E8A3A0"/><circle cx="336" cy="168" r="12" fill="#92CBB4" opacity=".3"/><circle cx="336" cy="168" r="7" class="panf"/><circle cx="336" cy="168" r="4.5" fill="#92CBB4"/></g></g>');
 
-  /* spotify library: leaning sleeves and a record */
+  /* spotify library: three sleeves fanned out evenly on a shelf */
   A['spotify-library'] = wrap('f',
-    '<g class="lift"><g transform="rotate(-9 120 150)"><rect x="70" y="70" width="110" height="110" rx="14" fill="#F1BFA2"/><circle cx="125" cy="125" r="30" fill="#FBF8F1" opacity=".55"/><circle cx="125" cy="125" r="9" fill="#F1BFA2"/></g>' +
-    '<g transform="rotate(4 210 150)"><rect x="150" y="62" width="110" height="110" rx="14" fill="#8CB8D9"/><rect x="170" y="86" width="70" height="8" rx="4" fill="#FBF8F1" opacity=".6"/><rect x="170" y="104" width="46" height="8" rx="4" fill="#FBF8F1" opacity=".45"/></g>' +
-    '<g transform="rotate(13 300 150)"><rect x="240" y="74" width="110" height="110" rx="14" fill="#B195D4"/><path d="M262 160c14-26 30-26 44-8s24 10 32-14" fill="none" stroke="#FBF8F1" stroke-width="5" stroke-linecap="round" opacity=".7"/></g></g>' +
-    '<rect x="52" y="196" width="296" height="8" rx="4" class="shelf"/>' +
+    '<g class="lift">' +
+    '<g transform="translate(118 0) rotate(-8 0 188)"><rect x="-52" y="84" width="104" height="104" rx="14" fill="#F1BFA2"/><circle cx="0" cy="136" r="28" fill="#FBF8F1" opacity=".55"/><circle cx="0" cy="136" r="8.5" fill="#F1BFA2"/></g>' +
+    '<g transform="translate(282 0) rotate(8 0 188)"><rect x="-52" y="84" width="104" height="104" rx="14" fill="#B195D4"/><path d="M-30 150c13-24 28-24 41-7s22 9 30-12" fill="none" stroke="#FBF8F1" stroke-width="5" stroke-linecap="round" opacity=".7"/></g>' +
+    '<g transform="translate(200 0)"><rect x="-52" y="76" width="104" height="112" rx="14" fill="#8CB8D9"/><rect x="-32" y="100" width="64" height="8" rx="4" fill="#FBF8F1" opacity=".6"/><rect x="-32" y="118" width="42" height="8" rx="4" fill="#FBF8F1" opacity=".45"/></g></g>' +
+    '<rect x="56" y="196" width="288" height="8" rx="4" class="shelf"/>' +
     '<path d="M200 22v24M188 36l12 12 12-12" fill="none" stroke="var(--ink)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>');
 
   window.HOME_ART = A;
