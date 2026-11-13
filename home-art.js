@@ -6,11 +6,11 @@
 
   /* album rating card */
   var tile = ['#E8A3A0', '#EDB1A0', '#F1BFA2', '#F4D3A4', '#F3E3A6', '#E1E3A5', '#CDE0AA', '#B8DAB0', '#A5D3B5'], t = '';
-  tile.forEach(function (c, i) { t += '<rect x="' + (84 + (i % 3) * 21) + '" y="' + (74 + Math.floor(i / 3) * 21) + '" width="18" height="18" rx="4" fill="' + c + '"/>'; });
+  tile.forEach(function (c, i) { t += '<rect x="' + (86 + (i % 3) * 21) + '" y="' + (76 + Math.floor(i / 3) * 21) + '" width="18" height="18" rx="4" fill="' + c + '"/>'; });
   function bar(y, w, c) { return '<rect x="148" y="' + y + '" width="140" height="8" rx="4" class="trk"/><rect x="148" y="' + y + '" width="' + w + '" height="8" rx="4" fill="' + c + '"/>'; }
   A['album-rating'] = wrap('a',
     '<g class="lift"><rect x="62" y="52" width="276" height="166" rx="18" class="pan edge"/>' +
-    '<rect x="78" y="68" width="76" height="76" rx="12" class="soft"/>' + '<g transform="translate(-2 -2)">' + t + '</g>' +
+    '<rect x="78" y="68" width="76" height="76" rx="12" class="soft"/>' + t +
     '<text x="174" y="92" class="ser ink" font-size="18" font-weight="700">Typical of Me</text><rect x="174" y="102" width="70" height="6" rx="3" class="mut"/>' +
     '<circle cx="308" cy="100" r="24" fill="#B8DAB0"/><text x="308" y="108" text-anchor="middle" class="ser" font-size="22" font-weight="700" fill="#3F3532">8.2</text>' +
     '<g transform="translate(-6 28)">' + bar(130, 120, '#A5D3B5') + bar(150, 96, '#CDE0AA') + bar(170, 130, '#92CBB4') + '</g>' +
