@@ -464,16 +464,14 @@
     var chartOpts =
       '<div class="row"><label>Weeks start on <select id="sp-wstart">' + dayOpts(cfg.weekStart == null ? 5 : cfg.weekStart) + '</select></label>' +
       '<label>Weeks to import <select id="sp-weeks">' + opt(8, "Last 8") + opt(12, "Last 12", true) + opt(26, "Last 26") + opt(52, "Last 52") + opt(0, "All of them") + '</select></label></div>' +
-      '<div class="row"><label><input type="checkbox" id="sp-skip" checked> Skip the last week if it\'s incomplete</label></div>' +
-      '<p class="msg">Billboard\'s weeks run Friday to Thursday, so Friday is the default. The top 100 songs of each week are kept.</p>';
+      '<div class="row"><label><input type="checkbox" id="sp-skip" checked> Skip the last week if it\'s incomplete</label></div>';
     dlg = el('<dialog class="spdlg" aria-labelledby="sp-h"><div class="spin">' +
       '<h2 id="sp-h">Import from your Spotify library</h2>' +
       '<p class="msg" id="sp-sum">Looking for saved history…</p>' +
       '<details id="sp-add"><summary>Add or update Spotify files</summary>' +
-      '<p class="msg">Choose the zip you downloaded from Spotify, or the Streaming_History JSON files inside it. Files are read in this browser and aren\'t uploaded anywhere. Your plays are saved in this browser, so later you only add a newer export.</p>' +
       '<div class="drop" id="sp-drop"><label class="filebtn">Choose files<input type="file" id="sp-file" accept=".zip,.json" multiple hidden></label>' +
       '<div class="msg" id="sp-status" style="margin-top:8px">or drop them here</div></div></details>' +
-      '<p class="msg">The <a id="sp-liblink" href="' + SP.lib.page("spotify-library/index.html") + '">Spotify library</a> is where you merge album editions, back up or delete your history.</p>' +
+      '<p class="msg"><a id="sp-liblink" href="' + SP.lib.page("spotify-library/index.html") + '">Open the Spotify library</a></p>' +
       '<div class="spopts" id="sp-opts" hidden>' +
       '<div class="row"><label>Time zone <select id="sp-tz">' + zoneOpts + '</select></label>' +
       '<label>Count a play after <input type="number" id="sp-sec" min="0" max="300" value="' + L.minSec + '"> sec</label></div>' +
@@ -502,13 +500,9 @@
       }
     }
     var BACK = { day: [[14, "14 days"], [30, "30 days"], [60, "60 days"], [90, "90 days"], [180, "180 days"]], week: [[12, "12 weeks"], [26, "26 weeks"], [52, "52 weeks"], [104, "104 weeks"]] };
-    var GNOTE = { day: "Each day becomes one column. Only the most recent days are kept so the table stays a readable size.",
-      week: "Weeks run from the day you pick. Only the most recent weeks are kept.",
-      month: "", year: "Each year becomes one column. Everything in your history is kept." };
+    var GNOTE = { day: "", week: "", month: "", year: "" };
     if (cfg.allTime) {
       BACK.day.unshift([0, "All time"]); BACK.week.unshift([0, "All time"]);
-      GNOTE.day = "Every day from your first play is kept. Pick a shorter stretch for a closer look.";
-      GNOTE.week = "Weeks run from the day you pick, from your first play on.";
     }
     function syncGrain() {
       if (!isTable) return;

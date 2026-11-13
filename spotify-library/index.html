@@ -141,6 +141,10 @@
   .chip { font:inherit; font-size:14px; font-weight:400; padding:4px 12px; border-radius:999px; border:1px solid var(--line); background:var(--field); color:var(--ink); cursor:pointer; }
   .chip:hover { background:var(--soft); }
   .chip[aria-pressed="true"] { border-color:var(--ink); font-weight:700; }
+  /* text trimming helpers */
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
 </style>
 </head>
 <body>
@@ -149,36 +153,33 @@
 <div class="wrap">
   <a class="homelink" href="../index.html">← All tools</a>
   <h1>Spotify Library</h1>
-  <p class="sub">Add your Spotify history once. The Cumulative streams graph, the Streams table maker and the Personal chart maker pull from it, and the merges you make here count everywhere.</p>
 
   <div class="card">
-    <h2>1. Your history</h2>
+    <h2>Your history</h2>
     <p class="stat" id="stat">Loading…</p>
     <p class="statsub" id="statSub"></p>
     <div class="drop" id="drop">
       <label class="filebtn">Choose Spotify files<input type="file" id="file" accept=".zip,.json" multiple hidden></label>
-      <div class="msg" id="addMsg" style="margin-top:8px">Choose the zip from Spotify (or the Streaming_History JSON files inside it), or drop them here. Nothing is uploaded; files are read in this browser.</div>
+      <div class="msg" id="addMsg" style="margin-top:8px"></div>
     </div>
     <div class="row">
       <button class="alt small" id="backup" hidden>Back up history</button>
       <label class="filebtn small" style="padding:6px 12px;font-size:14px;border-radius:8px">Restore backup<input type="file" id="restore" accept=".mthist,.gz" hidden></label>
       <button class="danger small" id="clear" hidden>Delete saved history</button>
     </div>
-    <p class="hint" id="histHint">Your history is saved in this browser only. Clearing the site's data would delete it, so back it up now and then. Adding a newer export later only adds plays you don't already have.</p>
+    <p class="hint" id="histHint"></p>
   </div>
 
   <div class="card">
-    <h2>2. Settings</h2>
+    <h2>Settings</h2>
     <div class="row">
       <label>Time zone <select id="tz" class="wide"></select></label>
       <label>Count a play after <input type="number" id="sec" min="0" max="300"> sec</label>
     </div>
-    <p class="hint" style="margin-top:0">Used by every tool when numbers are pulled from your history. Changing it applies the next time you pull.</p>
   </div>
 
   <div class="card">
-    <h2>3. Merge editions and duplicates</h2>
-    <p class="msg" style="margin-top:0">Spotify lists each edition as its own album, like “Fearless” and “Fearless (Platinum Edition)”. Pick an artist, tap the tiles that are the same thing, then press Merge. Every tool counts them together afterwards. Your saved plays are never changed, and you can split any merge.</p>
+    <h2>Merge editions and duplicates</h2>
     <div class="row">
       <label>Merge <select id="kind"><option value="albums">albums</option><option value="songs">songs</option></select></label>
       <label>Artist <input type="text" id="artistIn" list="artistList" placeholder="Type or pick an artist" autocomplete="off"></label><datalist id="artistList"></datalist>
@@ -209,18 +210,9 @@
         <div class="row"><button class="small" id="mergeAll">Merge all of these</button><span class="msg" id="sugMsg"></span></div>
       </div>
     </details>
-    <h3>Merges you've made</h3>
+    <h3 class="sr">Merges you've made</h3>
     <div class="rules" id="rules"></div>
     <div class="msg" id="rulesMsg"></div>
-  </div>
-
-  <div class="card">
-    <h2>4. Use your history</h2>
-    <div class="uselist">
-      <a href="../cumulative-streams/index.html"><b>Cumulative streams graph →</b><span>Press “Pull from Spotify library” for day, week, month or year, over all time or any stretch.</span></a>
-      <a href="../streams-table/index.html"><b>Streams table maker →</b><span>Press “Import from Spotify” for a table of albums, songs or artists.</span></a>
-      <a href="../personal-chart/index.html"><b>Personal chart maker →</b><span>Press “Import from Spotify” to build weekly top 100 charts from any weeks.</span></a>
-    </div>
   </div>
 </div>
 
@@ -324,7 +316,7 @@ function buildTiles(){
 function renderTiles(){
   const area = $("tileArea"), box = $("tiles"); box.innerHTML = "";
   $("tileMsg").textContent = "";
-  if (!artist){ area.hidden = true; $("tileMsg").textContent = LIB.status() ? "Choose an artist above to see their " + kind + "." : "Add your history first."; return; }
+  if (!artist){ area.hidden = true; $("tileMsg").textContent = LIB.status() ? "" : "Add your history first."; return; }
   buildTiles();
   if (!tiles.length){ area.hidden = true; $("tileMsg").textContent = `No ${kind} found for “${artist}”.` + (kind === "albums" && LIB.status() && !LIB.status().hasAlbum ? " Your files have no album names (account data only)." : ""); return; }
   area.hidden = false;
@@ -348,7 +340,7 @@ function renderTiles(){
   const clear = groups.filter(g => g.strong).length;
   $("mergeLikely").hidden = !clear; $("mergeLikely").textContent = `Merge all clear matches (${clear})`;
   const merged = tiles.filter(t => t.members.length).length;
-  $("tileSum").textContent = `${fmt(tiles.length)} ${kind}` + (clear ? ` · ${clear} group${clear === 1 ? "" : "s"} that look the same` : "") + (merged ? ` · ${merged} merged` : "") + ". Tap tiles to select.";
+  $("tileSum").textContent = `${fmt(tiles.length)} ${kind}` + (clear ? ` · ${clear} group${clear === 1 ? "" : "s"} that look the same` : "") + (merged ? ` · ${merged} merged` : "") + ".";
   renderSel();
 }
 function tileEl(t){
@@ -401,7 +393,7 @@ $("mergeLikely").addEventListener("click", () => {
     g.names.forEach(x => { if (x !== keep && LIB.addRule(L, kind, artist, x, keep)) did = true; });
     if (did) groups++;
   });
-  LIB.set(L); sel.clear(); renderTiles(); renderRules(); clearScan(); $("tileMsg").textContent = `Merged ${groups} group${groups === 1 ? "" : "s"}. Split any of them with the Split button.`;
+  LIB.set(L); sel.clear(); renderTiles(); renderRules(); clearScan(); $("tileMsg").textContent = `Merged ${groups} group${groups === 1 ? "" : "s"}.`;
 });
 
 /* ---- find clear matches across every artist ---- */
@@ -435,7 +427,7 @@ function renderSugs(){
 }
 $("mergeAll").addEventListener("click", () => {
   const L = LIB.get(); let n = 0; sugList.forEach(s => { if (LIB.addRule(L, kind, s.artist, s.from, s.to)) n++; });
-  LIB.set(L); sugList = []; renderSugs(); $("scanMsg").textContent = ""; $("rulesMsg").textContent = `Merged ${fmt(n)}. You can undo any of them below or with Split on a tile.`; renderRules(); renderTiles();
+  LIB.set(L); sugList = []; renderSugs(); $("scanMsg").textContent = ""; $("rulesMsg").textContent = `Merged ${fmt(n)}.`; renderRules(); renderTiles();
 });
 function renderRules(){
   const R = LIB.get().rules[kind] || {}, box = $("rules"); box.innerHTML = "";

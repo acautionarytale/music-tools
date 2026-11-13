@@ -100,6 +100,10 @@
   textarea { width:100%; font:inherit; font-size:15px; color:var(--ink); background:var(--field); border:1px solid var(--line); border-radius:10px; padding:9px 12px; resize:vertical; }
   input[type=date] { font:inherit; font-size:16px; color:var(--ink); background:var(--field); border:1px solid var(--line); border-radius:10px; padding:8px 12px; }
   #subtitle { width:min(300px, calc(100vw - 130px)); }
+  /* text trimming helpers */
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
 </style>
 </head>
 <body>
@@ -108,11 +112,10 @@
 <div class="wrap">
   <a class="homelink" href="../index.html">← All tools</a>
   <h1>Personal Chart Maker</h1>
-  <p class="sub">Enter the songs you played each week and get a shareable, Hot 100-style chart of your own, with last week, peak, weeks on chart and movement worked out for you.</p>
 
   <!-- DATA -->
   <div class="card">
-    <h2>1. Weeks</h2>
+    <h2>Weeks</h2>
     <div class="row">
       <label class="filebtn">Upload sheet (.xlsx / .csv)
         <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
@@ -121,7 +124,7 @@
       <button class="alt small" id="tpl">Download template</button>
       <button class="alt small" id="spBtn">Import from Spotify</button>
     </div>
-    <div class="msg" id="loadMsg">Columns needed: Week, Title, Artist, Streams. Week is the date the week ends. Artist is optional.</div>
+    <div class="msg" id="loadMsg"></div>
     <div class="row" style="margin-top:12px">
       <label>Week ending <select id="week"></select></label>
       <button class="danger small" id="delWeek">Delete week</button>
@@ -147,7 +150,7 @@
   <!-- EDITOR -->
   <div class="card">
     <details open>
-      <summary>2. Enter streams for the week</summary>
+      <summary>Streams for the week</summary>
       <div class="gridwrap" id="grid"></div>
       <div class="row" style="margin-top:10px">
         <button class="alt small" id="addSong">+ Add song</button>
@@ -158,10 +161,9 @@
         <textarea id="pasteBox" rows="5" spellcheck="false" placeholder="One song per line: Title, Artist, Streams&#10;From the Start, Laufey, 45"></textarea>
         <div class="row" style="margin-top:8px">
           <button class="alt small" id="pasteGo">Add to this week</button>
-          <span class="msg" id="pasteMsg">Commas or tabs both work, so you can paste straight from a spreadsheet. Artist can be left out.</span>
+          <span class="msg" id="pasteMsg"></span>
         </div>
       </details>
-      <p class="hint">Songs are ranked by their streams that week, and a song that's already in the week gets its streams updated. A blank or zero count means the song didn't play. Last week, peak and weeks on chart come from the other weeks you've entered.</p>
     </details>
     <datalist id="titleList"></datalist>
     <datalist id="artistList"></datalist>
@@ -169,7 +171,7 @@
 
   <!-- OPTIONS -->
   <div class="card">
-    <h2>3. Chart</h2>
+    <h2>Chart</h2>
     <div class="row">
       <label>Title <input type="text" id="title"></label>
       <button class="alt small" id="autoTitle">Auto title</button>
@@ -190,25 +192,25 @@
       <label><input type="checkbox" id="showWks" checked> Weeks on chart</label>
       <label><input type="checkbox" id="showStreams" checked> Streams</label>
     </div>
-    <div class="style-group"><h3>Extra color</h3>
+    <div class="style-group"><h3 class="sr">Extra color</h3>
       <div class="row" style="margin-bottom:0">
         <label><input type="checkbox" id="cStreams" checked> Shade streams by change</label>
         <label><input type="checkbox" id="cPeak" checked> Highlight new and tied peaks</label>
         <label><input type="checkbox" id="cRows" checked> Tint titles by movement</label>
       </div>
     </div>
-    <div class="style-group"><h3>Background</h3>
+    <div class="style-group"><h3 class="sr">Background</h3>
       <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
       <div class="custom-row" id="customTheme" hidden>
         <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
         <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
       </div>
     </div>
-    <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+    <div class="style-group"><h3 class="sr">Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
     <div class="row">
       <button id="dl">Download PNG</button>
       <button id="share" class="alt" style="display:none">Share / Save</button>
-      <span class="msg" id="dlMsg">If the download doesn't start, press and hold the image to save it.</span>
+      <span class="msg" id="dlMsg"></span>
     </div>
   </div>
 

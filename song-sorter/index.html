@@ -173,6 +173,10 @@
   ol.ranklist li { display:flex; gap:14px; padding:8px 14px; border-top:1px solid var(--line); }
   ol.ranklist li:first-child { border-top:0; }
   ol.ranklist b { min-width:3em; color:var(--muted); font-style:italic; font-weight:400; }
+  /* text trimming helpers */
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
 </style>
 </head>
 <body>
@@ -181,11 +185,10 @@
 <div class="wrap">
   <a class="homelink" href="../index.html">&larr; All tools</a>
   <h1>Song &amp; Album Sorter</h1>
-  <p class="sub">Paste a list, pick a winner from each pair, and get a full ranking you can download as an image.</p>
 
   <!-- 1. LIST -->
   <section class="card" id="setup">
-    <h2>1. Your list</h2>
+    <h2>Your list</h2>
     <div class="row">
       <label>Sorting
         <select id="noun">
@@ -200,7 +203,7 @@
       <label><input type="checkbox" id="clean" checked> Remove track numbers and times</label>
       <label><input type="checkbox" id="shuffle" checked> Shuffle before starting</label>
     </div>
-    <div class="msg" id="listMsg">One per line. Add as many as you like, but more items means more picks.</div>
+    <div class="msg" id="listMsg"></div>
     <div class="row" style="margin-top:14px">
       <button id="start" disabled>Start sorting</button>
       <button class="alt" id="sample">Try an example</button>
@@ -210,7 +213,7 @@
 
   <!-- 2. PICKS -->
   <section class="card" id="duel" hidden>
-    <h2 id="duelHead">2. Pick your favorite</h2>
+    <h2 id="duelHead">Pick your favorite</h2>
     <div class="meter" aria-hidden="true"><i id="bar"></i></div>
     <div class="progress"><span id="pCount" aria-live="polite"></span><span id="pLeft"></span></div>
     <p class="question" id="question">Which do you prefer?</p>
@@ -224,13 +227,12 @@
       <button class="alt" id="undo" type="button">Undo last pick</button>
       <button class="alt danger" id="quit" type="button">Start over</button>
     </div>
-    <p class="hint keys">Everything saves as you go, so you can close this and come back later.</p>
   </section>
 
   <!-- 3. RESULT -->
   <section id="result" hidden>
     <div class="card">
-      <h2>3. Your ranking</h2>
+      <h2>Your ranking</h2>
       <div class="row">
         <label>Title <input type="text" id="title" placeholder="My Song Ranking"></label>
         <label>Show
@@ -245,14 +247,14 @@
           </select>
         </label>
       </div>
-      <div class="style-group"><h3>Background</h3>
+      <div class="style-group"><h3 class="sr">Background</h3>
         <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
         <div class="custom-row" id="customTheme" hidden>
           <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
           <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
         </div>
       </div>
-      <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+      <div class="style-group"><h3 class="sr">Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
       <div class="row">
         <button id="dl">Download PNG</button>
         <button id="share" class="alt" style="display:none">Share / Save</button>

@@ -198,6 +198,52 @@
     .tool, .shot, .open svg { transition: none; }
     html { scroll-behavior: auto; }
   }
+  /* text trimming helpers */
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
+
+  /* ---------- hero extras, card art, edition button ---------- */
+  .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; }
+  .hero h1 { margin-bottom: 20px; }
+  .eq { flex: none; width: clamp(96px, 14vw, 150px); height: auto; margin-bottom: 14px; opacity: .92; }
+  .eq rect { transform-box: fill-box; transform-origin: bottom; animation: eqbounce 2.6s ease-in-out infinite; }
+  .eq rect:nth-child(2) { animation-delay: -.5s; } .eq rect:nth-child(3) { animation-delay: -1s; } .eq rect:nth-child(4) { animation-delay: -1.5s; } .eq rect:nth-child(5) { animation-delay: -2s; } .eq rect:nth-child(6) { animation-delay: -.25s; }
+  @keyframes eqbounce { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.72); } }
+  :root[data-theme="dark"] .eq { opacity: .8; }
+  .edition {
+    display: inline-flex; align-items: center; gap: 12px; padding: 8px 18px 8px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 88%, transparent);
+    color: var(--ink); text-decoration: none; font-weight: 700; font-size: 17px;
+    box-shadow: 0 8px 22px -14px var(--shadow); transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .2s, border-color .2s;
+  }
+  .edition:hover { transform: translateY(-2px); box-shadow: 0 14px 28px -14px var(--shadow); border-color: color-mix(in srgb, var(--focus) 60%, var(--line)); }
+  .edition:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .edition svg { width: 18px; height: 18px; transition: transform .2s; }
+  .edition:hover svg { transform: translateX(4px); }
+  .edition .disc { position: relative; width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(from 30deg, #E8A3A0, #F4D3A4, #92CBB4, #8CB8D9, #B195D4, #E8A3A0); animation: discspin 8s linear infinite; }
+  .edition .disc::after { content: ""; position: absolute; inset: 11px; border-radius: 50%; background: var(--panel); }
+  @keyframes discspin { to { transform: rotate(360deg); } }
+
+  .frame { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 46%, var(--shot-bg)), color-mix(in srgb, var(--accent) 14%, var(--shot-bg))); }
+  .frame .art { display: block; width: 100%; height: 100%; transition: transform .45s cubic-bezier(.2,.7,.2,1); }
+  .tool:hover .art, .tool.hl .art { transform: scale(1.04); }
+  .art .grain { fill: var(--ink); opacity: .07; }
+  .art .lift { filter: drop-shadow(0 10px 14px rgba(74, 63, 59, .16)); }
+  :root[data-theme="dark"] .art .lift { filter: drop-shadow(0 10px 14px rgba(0, 0, 0, .35)); }
+  .art .pan { fill: var(--panel); } .art .panf { fill: var(--panel); }
+  .art .edge { stroke: var(--line); stroke-width: 1.5; }
+  .art .soft { fill: var(--soft); }
+  .art .trk { fill: var(--soft); }
+  .art .mut { fill: var(--line); }
+  .art .rule { fill: var(--line); opacity: .8; } .art .axis { fill: var(--ink-soft); opacity: .6; }
+  .art .ser { font-family: var(--serif); } .art .ink { fill: var(--ink); } .art .mutf { fill: var(--ink-soft); }
+  .art .shelf { fill: var(--ink); opacity: .22; }
+  .body { padding-bottom: 12px; }
+  .num { color: var(--ink); opacity: .5; }
+  .tool { background: color-mix(in srgb, var(--panel) 94%, transparent); }
+  @media (max-width: 720px) { .eq { display: none; } .hero { display: block; } }
+  @media (prefers-reduced-motion: reduce) { .eq rect, .edition .disc { animation: none; } .tool:hover .art { transform: none; } }
 </style>
 </head>
 <body>
@@ -206,47 +252,41 @@
 <div class="shell">
   <nav class="side" aria-label="Tools">
     <a class="brand" href="index.html"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Music tools</a>
-    <h3>Tools</h3>
     <input class="find" id="find" type="search" placeholder="Find a tool" aria-label="Find a tool" hidden>
     <ul class="slist" id="sideList"></ul>
     <p class="none" id="noMatch">No tools match that.</p>
-    <p class="sidefoot"><a href="#how">How it works</a></p>
   </nav>
 
   <main class="main">
     <header class="hero">
-      <span class="eyebrow"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span><span id="count">Four small tools</span>, all in your browser</span></span>
-      <h1>Music tools<br><em>for your listening notes</em></h1>
-      <p class="lede">Turn your ratings and stream counts into clean images you can share.</p>
+      <div class="hero-text">
+        <h1>Music tools</h1>
+        <a class="edition" id="editionLink" href="retro/index.html"><span class="disc" aria-hidden="true"></span><span>Retro edition</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
+      <svg class="eq" viewBox="0 0 160 110" aria-hidden="true" focusable="false"><g><rect x="4" y="44" width="18" height="62" rx="9" fill="#E8A3A0"/><rect x="30" y="20" width="18" height="86" rx="9" fill="#F4D3A4"/><rect x="56" y="58" width="18" height="48" rx="9" fill="#92CBB4"/><rect x="82" y="8" width="18" height="98" rx="9" fill="#8CB8D9"/><rect x="108" y="36" width="18" height="70" rx="9" fill="#B195D4"/><rect x="134" y="62" width="18" height="44" rx="9" fill="#F1BFA2"/></g></svg>
     </header>
 
     <ul class="tools" id="toolGrid"></ul>
 
-    <ol class="steps" id="how" aria-label="How the tools work">
-      <li><div><b>Add your numbers</b><span>Type them in, paste from a spreadsheet, or upload a sheet.</span></div></li>
-      <li><div><b>Pick a look</b><span>Choose colors, fonts and sizes, or match your album art.</span></div></li>
-      <li><div><b>Download the image</b><span>Save a PNG to post anywhere, or keep your data to edit later.</span></div></li>
-    </ol>
-
-    <p class="foot">Everything runs in your browser. Each tool saves your work on this device, so use its export or download buttons to keep a copy. The graph tool can import what you entered in the streams table maker.</p>
+    <p class="foot">Everything is saved in this browser only.</p>
   </main>
 </div>
 <script src="tools.js"></script>
+<script src="home-art.js"></script>
 <script>
 (function () {
   var tools = window.MUSIC_TOOLS || [], grid = document.getElementById('toolGrid'), list = document.getElementById('sideList');
   var arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-  var words = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
-  document.getElementById('count').textContent = (words[tools.length] || tools.length) + ' small tool' + (tools.length === 1 ? '' : 's');
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   var items = [];
   tools.forEach(function (t, i) {
     var c = 'c' + (i % 4 + 1), num = String(i + 1).padStart(2, '0');
     var li = el('li'), a = el('a', 'tool ' + c); a.href = t.href;
     var frame = el('div', 'frame'); frame.append(el('span', 'tag', t.tag || ''), el('span', 'num', num));
-    var img = el('img', 'shot'); img.src = t.img; img.width = t.w; img.height = t.h; img.alt = t.alt || ''; frame.appendChild(img);
-    var body = el('span', 'body'); body.append(el('h2', null, t.name), el('p', null, t.desc));
-    var open = el('span', 'open', 'Open the tool '); open.insertAdjacentHTML('beforeend', arrow); body.appendChild(open);
+    frame.dataset.art = t.id; frame.setAttribute('role', 'img'); frame.setAttribute('aria-label', t.alt || t.name);
+    if (window.HOME_ART && window.HOME_ART[t.id]) frame.insertAdjacentHTML('beforeend', window.HOME_ART[t.id]);
+    var body = el('span', 'body'); body.append(el('h2', null, t.name));
+    var open = el('span', 'open', 'Open '); open.insertAdjacentHTML('beforeend', arrow); body.appendChild(open);
     a.append(frame, body); li.appendChild(a); grid.appendChild(li);
 
     var sli = el('li'), s = el('a', 'sitem ' + c); s.href = t.href;

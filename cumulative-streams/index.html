@@ -131,6 +131,10 @@
   .themebtn .i-sun { display:none; }
   :root[data-theme="dark"] .themebtn .i-sun { display:block; }
   :root[data-theme="dark"] .themebtn .i-moon { display:none; }
+  /* text trimming helpers */
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
 </style>
 </head>
 <body>
@@ -139,11 +143,10 @@
 <div class="wrap">
   <a class="homelink" href="../index.html">&larr; All tools</a>
   <h1>Cumulative Streams Graph</h1>
-  <p class="sub">Plot the running total of streams for several albums, artists or tracks over any stretch of time, and download it as an image.</p>
 
   <!-- DATA -->
   <div class="card">
-    <h2>1. Data</h2>
+    <h2>Data</h2>
     <div class="row">
       <label class="filebtn">Upload sheet (.xlsx / .csv)
         <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
@@ -151,7 +154,7 @@
       <label><input type="checkbox" id="replace" checked> Replace existing data</label>
       <button class="alt small" id="tpl">Download template</button>
     </div>
-    <div class="msg" id="loadMsg">Columns needed: Month (or a date), Name, Streams (Name can be an album, artist or track).</div>
+    <div class="msg" id="loadMsg"></div>
     <div class="row" style="margin-top:12px">
       <label>Import from the Streams table maker:
         <select id="impKind"><option value="albums">Albums</option><option value="songs">Songs</option><option value="artists">Artists</option></select>
@@ -159,18 +162,18 @@
       <label id="impArtistLabel">Artist <select id="impArtist"></select></label>
       <button class="alt small" id="impGo">Import</button>
     </div>
-    <div class="msg" id="impMsg">Imports use the data saved in this browser by the Streams table maker, so nothing needs to be typed twice.</div>
+    <div class="msg" id="impMsg"></div>
     <div class="row" style="margin-top:12px">
       <label>Pull from the Spotify library:
         <select id="libKind"><option value="albums">Albums</option><option value="songs">Songs</option><option value="artists">Artists</option></select>
       </label>
       <button class="alt small" id="libGo">Pull from Spotify library…</button>
     </div>
-    <div class="msg" id="libMsg">Reads your saved Spotify history directly, so day by day over all time works. Merges you made in the Spotify library are applied. <a href="../spotify-library/index.html">Open the Spotify library</a></div>
+    <div class="msg" id="libMsg"><a href="../spotify-library/index.html">Open the Spotify library</a></div>
     <div class="row" style="margin-top:12px">
       <label>Period <select id="grain"></select></label>
       <label id="wsLabel" hidden>Weeks start on <select id="ws"></select></label>
-      <span class="msg" id="grainMsg">Uploads pick their own period from the dates: first-of-month dates are monthly, dates a week apart are weekly, other dates are daily.</span>
+      <span class="msg" id="grainMsg"></span>
     </div>
     <div class="row" id="yearRow">
       <label>Year <select id="year"></select></label>
@@ -194,15 +197,14 @@
   <!-- EDITOR -->
   <div class="card">
     <details open>
-      <summary id="entryTitle">2. Enter / edit streams (monthly totals)</summary>
+      <summary id="entryTitle">Streams (monthly totals)</summary>
       <div class="gridwrap" id="grid"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="newName" placeholder="New name (album, artist or track)">
         <button class="alt small" id="addName">+ Add</button>
       </div>
       <div class="mergebox">
-        <h3>Merge duplicates</h3>
-        <p class="hint" style="margin:0 0 10px">Spotify counts different editions of the same album separately. Merging adds the first name's numbers into the second and removes it. The pairing is remembered, so later imports merge it automatically.</p>
+        <h3 class="sr">Merge duplicates</h3>
         <div class="row" id="mergeRow">
           <label>Merge <select id="mergeFrom"></select></label>
           <label>into <select id="mergeTo"></select></label>
@@ -212,13 +214,13 @@
         <div class="chiplist" id="mergeSugs" aria-label="Possible duplicates"></div>
         <div class="chiplist" id="mergeRules" aria-label="Remembered merges"></div>
       </div>
-      <p class="hint" id="entryHint">Enter total streams per month for the year chosen above, then switch years to fill in the rest. Blank counts as 0. Order the rows with &#9650;&#9660;. You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
+      <p class="hint" id="entryHint"></p>
     </details>
   </div>
 
   <!-- OPTIONS -->
   <div class="card">
-    <h2>3. Graph</h2>
+    <h2>Graph</h2>
     <div class="row">
       <label>Title <input type="text" id="title"></label>
       <button class="alt small" id="autoTitle">Auto title</button>
@@ -252,29 +254,28 @@
         </select>
       </label>
     </div>
-    <div class="style-group"><h3>Chart type</h3>
+    <div class="style-group"><h3 class="sr">Chart type</h3>
       <div class="chips" id="modeChips" role="group" aria-label="Chart type"></div>
       <p class="stylenote" id="modeNote"></p>
     </div>
-    <div class="style-group"><h3>Background</h3>
+    <div class="style-group"><h3 class="sr">Background</h3>
       <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
       <div class="custom-row" id="customTheme" hidden>
         <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
         <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
       </div>
     </div>
-    <div class="style-group"><h3>Line colors</h3>
+    <div class="style-group"><h3 class="sr">Line colors</h3>
       <div class="chips" id="paletteChips" role="group" aria-label="Line colors"></div>
-      <p class="stylenote">Each name also has its own color dot below if you want to match an album or artist.</p>
-    </div>
-    <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+      </div>
+    <div class="style-group"><h3 class="sr">Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
     <div class="row">
       <label><input type="checkbox" id="smooth"> Smooth curves</label>
       <label><input type="checkbox" id="fill"> Soft fill under lines</label>
       <span class="msg" id="fillNote"></span>
     </div>
     <div class="style-group">
-      <div class="msg" style="margin-bottom:6px">Lines shown (click a name to hide or show it, click its color dot to change its color)</div>
+      <div class="msg" style="margin-bottom:6px" title="Click a name to hide or show it. Click its color dot to change the color.">Lines</div>
       <div class="picktools">
         <button class="alt small" id="showAll" type="button">Show all</button>
         <button class="alt small" id="hideAll" type="button">Hide all</button>
@@ -286,7 +287,7 @@
     <div class="row">
       <button id="dl">Download PNG</button>
       <button id="share" class="alt" style="display:none">Share / Save</button>
-      <span class="msg" id="dlMsg">If the download doesn't start, press and hold the image to save it.</span>
+      <span class="msg" id="dlMsg"></span>
     </div>
   </div>
 
@@ -335,9 +336,9 @@ const PALETTES = {
   sea:    { name:"Sea & sunset", stops:["#1F6789","#E07A5F","#3FA7A0","#F2B84B","#7A6FB0","#8BC27A","#D96C8C","#4F8FCB","#A9774F","#5C9EAD"] }
 };
 const MODES = {
-  lines: { name:"Lines",          icon:"\u223F", note:"One line per name." },
-  stack: { name:"Stacked",        icon:"\u25A4", note:"Names stacked on top of each other, so the top edge is the combined total." },
-  share: { name:"Share (100%)",   icon:"%",       note:"Each name's share of the combined total over time." }
+  lines: { name:"Lines",          icon:"\u223F", note:"" },
+  stack: { name:"Stacked",        icon:"\u25A4", note:"" },
+  share: { name:"Share (100%)",   icon:"%",       note:"" }
 };
 const FONTS = {
   serif: { name:"Serif", stack:'"Palatino Linotype",Palatino,"Book Antiqua","Iowan Old Style","Times New Roman",serif' },
@@ -362,6 +363,7 @@ function hslToHex(h,s,l){
   return toHex([f(0)*255, f(8)*255, f(4)*255]);
 }
 function applyStyle(){
+  if (!has(THEMES, opts.theme)) opts.theme = "cream"; if (!has(PALETTES, opts.palette)) opts.palette = "pastel"; if (!has(FONTS, opts.font)) opts.font = "serif";
   const id = has(THEMES, opts.theme) ? opts.theme : "cream";
   let th = THEMES[id];
   if (id === "custom"){
@@ -417,7 +419,7 @@ function sampleState(){
   // Line colors sampled from each project's cover: warm gray-taupe, grass green, curtain blue, ladder wood.
   const s = fresh();
   s.order = Object.keys(rows);
-  s.colors = { "Typical of Me":"#8C7869", "Everything I Know About Love":"#6F7F2E", "Bewitched":"#2A5290", "A Matter of Time":"#A0643A" };
+  s.colors = { "Typical of Me":"#E8591A", "Everything I Know About Love":"#14877F", "Bewitched":"#F2A900", "A Matter of Time":"#E0457B" };
   Object.keys(rows).forEach(n => Object.keys(rows[n]).forEach(y => rows[n][y].forEach((v,m) => {
     if (v) (s.vals[n] ||= {})[P.key("month", +y*12+m, 1)] = v;
   })));
@@ -531,10 +533,8 @@ function fillGrain(){
 }
 function applyGrainText(){
   const g = state.grain, u = unit(), adj = P.ADJ[g], n = curWin().ords.length;
-  $("entryTitle").textContent = `2. Enter / edit streams (${adj} totals)`;
-  $("entryHint").textContent = g==="month"
-    ? "Enter total streams per month for the year chosen above, then switch years to fill in the rest. Blank counts as 0. Order the rows with ▲▼. You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there."
-    : `Enter total streams per ${u}. The grid shows ${n} ${u}s; change "Columns" or "Ending" in step 1 to move it. Blank counts as 0. Order the rows with ▲▼. You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.`;
+  $("entryTitle").textContent = `Streams (${adj} totals)`;
+  $("entryHint").textContent = "";
   $("priorTxt").textContent = `Include streams from before the start ${u}`;
   const b = BTNS[g]; $("r12").textContent = b[0][0]; $("r12").dataset.n = b[0][1]; $("r6").textContent = b[1][0]; $("r6").dataset.n = b[1][1];
 }

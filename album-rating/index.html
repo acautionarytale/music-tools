@@ -203,6 +203,11 @@
   .themebtn .i-sun { display:none; }
   :root[data-theme="dark"] .themebtn .i-sun { display:block; }
   :root[data-theme="dark"] .themebtn .i-moon { display:none; }
+  /* text trimming helpers */
+  .savestate { margin: 8px 0 20px; }
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
 </style>
 </head>
 <body>
@@ -210,7 +215,7 @@
 
 <main class="app">
   <nav class="toc" aria-label="Jump to a section">
-    <h2>Jump to</h2>
+    <h2 class="sr">Jump to</h2>
     <ul>
       <li><a href="#sec-album">Album</a></li>
       <li><a href="#sec-songs">Songs</a></li>
@@ -225,7 +230,6 @@
   <section class="editor" aria-label="Editor">
     <a class="homelink" href="../index.html">← All tools</a>
     <h1>Album rating card</h1>
-    <p class="lede">Enter the tracklist and your ratings, then download the image.</p>
     <p class="savestate" id="saveState" role="status" aria-live="polite"></p>
 
     <div class="panel" id="sec-album" data-section>
@@ -239,13 +243,12 @@
         <button type="button" class="btn" id="coverBtn">Add cover art</button>
         <input type="file" id="coverFile" accept="image/*,.jpg,.jpeg,.png,.webp" style="display:none">
         <button type="button" class="btn" id="coverClear" hidden>Remove cover</button>
-        <span class="coverName" id="coverName" role="status">Without a cover, a color grid of your ratings is used.</span>
+        <span class="coverName" id="coverName" role="status"></span>
       </div>
     </div>
 
     <div class="panel" id="sec-songs" data-section>
       <h2>Songs and ratings</h2>
-      <p class="note">Drag the grip to reorder. With the keyboard, focus the grip and press the up or down arrow.</p>
       <ol class="songs" id="songs"></ol>
       <div class="listactions">
         <button type="button" class="btn" id="addSong">Add song</button>
@@ -253,15 +256,14 @@
       </div>
       <details>
         <summary>Paste a tracklist</summary>
-        <p>One song per line. Add a rating after a dash if you like, for example: <em>Song title - 8.5</em></p>
-        <textarea id="paste" aria-label="Tracklist to paste"></textarea>
+        <textarea id="paste" aria-label="Tracklist to paste" placeholder="Song title - 8.5&#10;Another song - 9"></textarea>
         <button type="button" class="btn" id="pasteAdd">Add these songs</button>
       </details>
     </div>
 
     <div class="panel" id="sec-score" data-section>
       <h2>Album score</h2>
-      <label class="field"><span>Your score for the whole album (1 to 10)</span>
+      <label class="field"><span>Album score (1 to 10)</span>
         <input type="number" id="override" min="1" max="10" step="0.1" inputmode="decimal" placeholder="Leave empty to use the average">
       </label>
       <p class="avg" id="avgText"></p>
@@ -269,8 +271,7 @@
 
     <div class="panel" id="sec-layout" data-section>
       <h2>Layout</h2>
-      <div class="style-group"><h3>Image size</h3><div class="chips" id="sizeChips" role="group" aria-label="Image size"></div></div>
-      <p class="avg" style="margin:-4px 0 12px">Tall always fits every song. The other sizes tighten the rows for long tracklists.</p>
+      <div class="style-group"><h3 class="sr">Image size</h3><div class="chips" id="sizeChips" role="group" aria-label="Image size"></div></div>
       <label class="check"><input type="checkbox" id="sortToggle"> Rank songs by rating in the image</label>
       <label class="check"><input type="checkbox" id="statsToggle"> Show quick stats</label>
       <p class="avg" id="layoutNote" style="margin-top:10px"></p>
@@ -278,7 +279,7 @@
 
     <div class="panel" id="sec-style" data-section>
       <h2>Style</h2>
-      <div class="style-group"><h3>Background</h3>
+      <div class="style-group"><h3 class="sr">Background</h3>
         <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
         <div class="custom-row" id="customTheme" hidden>
           <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
@@ -286,7 +287,7 @@
         </div>
         <p class="stylenote" id="themeNote"></p>
       </div>
-      <div class="style-group"><h3>Rating colors</h3>
+      <div class="style-group"><h3 class="sr">Rating colors</h3>
         <div class="chips" id="paletteChips" role="group" aria-label="Rating colors"></div>
         <div class="custom-row" id="customPalette" hidden>
           <label>Low <input type="color" id="cLow" aria-label="Custom color for low ratings"></label>
@@ -295,12 +296,11 @@
         </div>
         <p class="stylenote" id="paletteNote"></p>
       </div>
-      <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+      <div class="style-group"><h3 class="sr">Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
     </div>
 
     <div class="panel" id="sec-save" data-section>
       <h2>Save and load</h2>
-      <p class="note">Save everything on the page (details, songs, ratings, album score, style and cover) as one small file, and load it later to keep editing. Loading replaces what is on the page now. Your work is also saved automatically in this browser, but export is the way to back it up or move it to another device.</p>
       <div class="listactions">
         <button type="button" class="btn" id="exportBtn">Export rating</button>
         <button type="button" class="btn" id="importBtn">Import rating</button>
@@ -314,7 +314,6 @@
     <div class="stage"><canvas id="card" role="img" aria-label="Preview of your album rating card"></canvas></div>
     <div class="actions">
       <button type="button" class="btn primary" id="download">Download PNG</button>
-      <p class="hint">If the download is blocked, press and hold (or right-click) the image to save it.</p>
     </div>
   </section>
 </main>
@@ -800,7 +799,7 @@ $('#clearAll').addEventListener('click', () => {
 });
 
 /* ---------- Cover art ---------- */
-const DEFAULT_COVER_MSG = 'Without a cover, a color grid of your ratings is used.';
+const DEFAULT_COVER_MSG = '';
 function setCoverUi(name, msg) {
   $('#coverClear').hidden = !name;
   $('#coverName').textContent = msg || name || DEFAULT_COVER_MSG;
@@ -1048,12 +1047,11 @@ function paintStyleChips() {
   $('#cLow').value = state.custom.low; $('#cMid').value = state.custom.mid; $('#cHigh').value = state.custom.high;
 
   const notes = [];
-  if (!hasCover) notes.push('To use "From cover", add cover art first.');
   if (state.style.theme === 'custom' && contrast(state.custom.bg, state.custom.ink) < 4.5) {
     notes.push('These background and text colors may be hard to read together.');
   }
   $('#themeNote').textContent = notes.join(' ');
-  $('#paletteNote').textContent = hasCover ? '' : 'To use "From cover", add cover art first.';
+  $('#paletteNote').textContent = '';
 }
 
 function buildStyleControls() {

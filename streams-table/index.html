@@ -95,6 +95,10 @@
   .custom-row { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; }
   .custom-row[hidden] { display:none; }
   input[type="color"] { width:44px; height:36px; padding:2px; cursor:pointer; border:1px solid var(--line); border-radius:8px; background:var(--field); }
+  /* text trimming helpers */
+  .sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .msg a { color: var(--ink); }
+  .msg:empty, p.hint:empty, p.note:empty, p.stylenote:empty, p.avg:empty, .savestate:empty { display:none; }
 </style>
 </head>
 <body>
@@ -103,11 +107,10 @@
 <div class="wrap">
   <a class="homelink" href="../index.html">← All tools</a>
   <h1>Streams Table Maker</h1>
-  <p class="sub">Make a shareable PNG of average daily streams by day, week, month or year, with green/red change, for albums, songs or artists. Import from Spotify, upload a streams sheet or type the numbers in.</p>
 
   <!-- DATA -->
   <div class="card">
-    <h2>1. Data</h2>
+    <h2>Data</h2>
     <div class="row">
       <span id="kindLabel">Table of</span>
       <div class="chips" id="kindChips" role="group" aria-labelledby="kindLabel"></div>
@@ -124,7 +127,7 @@
     <div class="row" style="margin-top:10px">
       <label>Period <select id="grain"></select></label>
       <label id="wsLabel" hidden>Weeks start on <select id="ws"></select></label>
-      <span class="msg" id="grainMsg">Uploads pick their own period from the dates: first-of-month dates are monthly, dates a week apart are weekly, other dates are daily.</span>
+      <span class="msg" id="grainMsg"></span>
     </div>
     <div class="row" id="artistRow">
       <label>Artist <select id="artist"></select></label>
@@ -154,15 +157,15 @@
   <!-- EDITOR -->
   <div class="card">
     <details open>
-      <summary id="entryTitle">2. Enter / edit streams (monthly totals)</summary>
+      <summary id="entryTitle">Streams (monthly totals)</summary>
       <div class="gridwrap" id="grid"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="newAlbum">
         <button class="alt small" id="addAlbum"></button>
       </div>
       <div class="mergebox">
-        <h3>Merge duplicates</h3>
-        <p class="hint" id="mergeHint" style="margin:0 0 10px"></p>
+        <h3 class="sr">Merge duplicates</h3>
+        <p class="hint" id="mergeHint"></p>
         <div class="row" id="mergeRow">
           <label>Merge <select id="mergeFrom"></select></label>
           <label>into <select id="mergeTo"></select></label>
@@ -172,13 +175,13 @@
         <div class="chiplist" id="mergeSugs" aria-label="Possible duplicates"></div>
         <div class="chiplist" id="mergeRules" aria-label="Remembered merges"></div>
       </div>
-      <p class="hint" id="entryHint">Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in "Entry order"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.</p>
+      <p class="hint" id="entryHint"></p>
     </details>
   </div>
 
   <!-- OPTIONS -->
   <div class="card">
-    <h2>3. Chart</h2>
+    <h2>Chart</h2>
     <div class="row">
       <label>Title <input type="text" id="title"></label>
       <button class="alt small" id="autoTitle">Auto title</button>
@@ -201,18 +204,18 @@
         </select>
       </label>
     </div>
-    <div class="style-group"><h3>Background</h3>
+    <div class="style-group"><h3 class="sr">Background</h3>
       <div class="chips" id="themeChips" role="group" aria-label="Background"></div>
       <div class="custom-row" id="customTheme" hidden>
         <label>Background <input type="color" id="cBg" aria-label="Custom background color"></label>
         <label>Text <input type="color" id="cInk" aria-label="Custom text color"></label>
       </div>
     </div>
-    <div class="style-group"><h3>Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
+    <div class="style-group"><h3 class="sr">Typeface</h3><div class="chips" id="fontChips" role="group" aria-label="Typeface"></div></div>
     <div class="row">
       <button id="dl">Download PNG</button>
       <button id="share" class="alt" style="display:none">Share / Save</button>
-      <span class="msg" id="dlMsg">If the download doesn't start, press and hold the image to save it.</span>
+      <span class="msg" id="dlMsg"></span>
     </div>
   </div>
 
@@ -229,11 +232,11 @@ const GROUP = "Artists";   // the artists table has one list of rows; it is stor
 const KIND_IDS = ["albums","songs","artists"];
 const KINDS = {
   albums:  { label:"Albums",  one:"album",  One:"Album",  many:"albums",  grouped:true,  names:["album","release","title"],
-             cols:"Columns needed: Month (or a date), Album, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
+             cols:"" },
   songs:   { label:"Songs",   one:"song",   One:"Song",   many:"songs",   grouped:true,  names:["song","track","title"],
-             cols:"Columns needed: Month (or a date), Song, Streams. Optional: Artist. Each sheet in a workbook becomes an artist unless there's an Artist column." },
+             cols:"" },
   artists: { label:"Artists", one:"artist", One:"Artist", many:"artists", grouped:false, names:["artist","name"],
-             cols:"Columns needed: Month (or a date), Artist, Streams. Each artist becomes a row in the table." }
+             cols:"" }
 };
 const P = Periods;
 const $ = id => document.getElementById(id);
@@ -566,7 +569,7 @@ $("clearAll").addEventListener("click", ()=>{
 function renderGrid(){
   const art=getArt(), g=state.grain, ws=state.ws, W=curWin();
   if (!art.order.length){ $("grid").innerHTML='<div class="msg" style="padding:12px">No '+K().many+' yet. Add one below or upload a sheet.</div>'; return; }
-  const hd = (o, prev) => `<th${prev?' class="prevh"':""} title="${esc(P.label(g,o,ws,false))}">${esc(g==="month" ? P.label(g,o,ws,!prev) : P.label(g,o,ws,true))}</th>`;
+  const hd = (o, prev) => `<th${prev?' class="prevh"':""} title="${esc((prev?"Used only for the first % change: ":"")+P.label(g,o,ws,false))}">${esc(g==="month" ? P.label(g,o,ws,!prev) : P.label(g,o,ws,true))}</th>`;
   let h='<table class="grid"><thead><tr><th class="sticky">'+K().One+'</th>'+hd(W.prev,true)+W.ords.map(o=>hd(o,false)).join("")+'</tr></thead><tbody>';
   art.order.forEach((name,i)=>{
     h+=`<tr><td class="sticky"><input class="aname" data-i="${i}" value="${esc(name)}">
@@ -921,10 +924,8 @@ $("share").addEventListener("click", ()=>{
 const kindRefs = [];
 function applyGrainText(){
   const g = state.grain, u = unit(), adj = P.ADJ[g], n = curWin().ords.length;
-  $("entryTitle").textContent = `2. Enter / edit streams (${adj} totals)`;
-  $("entryHint").textContent = g==="month"
-    ? "Enter total streams per month. The shaded Dec column is last year's December, used only for January's % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼ (that's the order on the chart in \"Entry order\"). You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there."
-    : `Enter total streams per ${u}. The grid shows ${n} ${u}s; change "Columns" or "Ending" in step 1 to move it. The shaded first column is the ${u} before, used only for the first % change (leave it blank if you don't want that). Blank counts as 0. Order the rows with ▲▼. You can paste a block of cells from a spreadsheet into any cell and it fills across and down from there.`;
+  $("entryTitle").textContent = `Streams (${adj} totals)`;
+  $("entryHint").textContent = "";
   $("metric").options[1].textContent = adj[0].toUpperCase()+adj.slice(1)+" total";
   $("showLastTxt").textContent = "Include last "+u;
   $("lastDaysTxt").textContent = "Days in last "+u;
