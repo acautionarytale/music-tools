@@ -574,7 +574,7 @@ function draw() {
     lines = wrap(title, maxW);
     if (lines.length * size * 1.14 <= COVER - 100) break;
   }
-  const lh = size * 1.14, artistH = artist ? 46 : 0, yearH = year ? 46 : 0;
+  const lh = size * 1.14, artistH = artist ? (RETRO ? 38 : 46) : 0, yearH = year ? (RETRO ? 58 : 46) : 0;
   const blockH = artistH + lines.length * lh + yearH;
   const ty = top + (COVER - blockH) / 2;
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -590,7 +590,7 @@ function draw() {
     ctx.fillText(l, tx, ly);
   });
   if (year) {
-    if (RETRO) { RetroGfx.pill(ctx, year, tx, ty + artistH + lines.length * lh + 22, 22, P.B, P, -0.03); }
+    if (RETRO) { RetroGfx.pill(ctx, year, tx, ty + artistH + lines.length * lh + 38, 22, P.B, P, -0.03); }
     else { ctx.font = `italic 400 27px ${FONT}`; ctx.fillStyle = MUTED; ctx.fillText(year, tx, ty + artistH + lines.length * lh + 30); }
   }
 
